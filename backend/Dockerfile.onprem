@@ -1,0 +1,30 @@
+# Backend image for the Windows PC (profiles cloud,onprem). Build context: the repository root.
+FROM maven:3.9.11-eclipse-temurin-17 AS build
+
+WORKDIR /workspace
+COPY backend/pom.xml ./pom.xml
+COPY backend/src ./src
+RUN mvn --batch-mode --no-transfer-progress \
+    -Pcloud-linux-native,!station-macos-arm64-native \
+    -DskipTests package
+
+FROM eclipse-temurin:17-jre-jammy
+
+WORKDIR /app
+# libgtk2.0-0: the bundled OpenCV natives link against GTK2 at load time, even headless.
+RUN apt-get update \
+    && apt-get install --no-install-recommends -y ca-certificates curl libgtk2.0-0 \
+    && rm -rf /var/lib/apt/lists/* \
+    && mkdir -p /data/seals && chown 10001:10001 /data/seals
+
+COPY --from=build --chown=10001:10001 \
+    /workspace/target/hand-wash-compliance-1.0.0.jar /app/app.jar
+
+ENV SPRING_PROFILES_ACTIVE=cloud,onprem \
+    SERVER_PORT=8080 \
+    SERVER_ADDRESS=0.0.0.0 \
+    JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=70.0 -XX:+ExitOnOutOfMemoryError"
+
+EXPOSE 8080
+USER 10001:10001
+ENTRYPOINT ["java", "-Duser.home=/tmp", "-jar", "/app/app.jar"]
