@@ -1,6 +1,6 @@
 package com.handwash.decorator.repository;
 
-import com.handwash.model.IntentoLavadoResumen;
+import com.handwash.model.HandwashingAttemptSummary;
 import com.handwash.repository.FailedAttemptStore;
 
 import java.util.List;
@@ -25,7 +25,7 @@ public final class SqlInjectionGuardFailedAttemptStoreDecorator implements Faile
     }
 
     @Override
-    public void insertIfAbsent(String sessionId, IntentoLavadoResumen attempt) {
+    public void insertIfAbsent(String sessionId, HandwashingAttemptSummary attempt) {
         validarSessionId(sessionId);
         if (attempt == null || attempt.numero() < 1 || attempt.duracionMs() < 0) {
             throw new IllegalArgumentException("Resumen de intento inválido");
@@ -34,7 +34,7 @@ public final class SqlInjectionGuardFailedAttemptStoreDecorator implements Faile
     }
 
     @Override
-    public List<IntentoLavadoResumen> findBySession(String sessionId) {
+    public List<HandwashingAttemptSummary> findBySession(String sessionId) {
         validarSessionId(sessionId);
         return delegate.findBySession(sessionId);
     }

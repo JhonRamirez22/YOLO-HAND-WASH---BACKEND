@@ -46,10 +46,10 @@ class SqlInjectionGuardFailedAttemptStoreDecoratorTest {
     private FailedAttemptStore targetCountingCalls(AtomicInteger calls) {
         return new FailedAttemptStore() {
             @Override public void insertIfAbsent(String sessionId,
-                                                 com.handwash.model.IntentoLavadoResumen attempt) {
+                                                 com.handwash.model.HandwashingAttemptSummary attempt) {
                 calls.incrementAndGet();
             }
-            @Override public List<com.handwash.model.IntentoLavadoResumen> findBySession(String sessionId) {
+            @Override public List<com.handwash.model.HandwashingAttemptSummary> findBySession(String sessionId) {
                 calls.incrementAndGet();
                 return List.of();
             }

@@ -1,6 +1,6 @@
 package com.handwash.observer;
 
-import com.handwash.model.DeteccionEvento;
+import com.handwash.model.DetectionEvent;
 
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.logging.Level;
@@ -9,29 +9,29 @@ import java.util.logging.Logger;
 public abstract class Subject {
     private static final Logger LOG = Logger.getLogger(Subject.class.getName());
     /** Critical subscribers run first; optional subscribers never delay State/Strategy. */
-    private final CopyOnWriteArrayList<DeteccionObserver> observers = new CopyOnWriteArrayList<>();
-    private final CopyOnWriteArrayList<DeteccionObserver> criticalObservers = new CopyOnWriteArrayList<>();
+    private final CopyOnWriteArrayList<DetectionObserver> observers = new CopyOnWriteArrayList<>();
+    private final CopyOnWriteArrayList<DetectionObserver> criticalObservers = new CopyOnWriteArrayList<>();
 
-    public synchronized void addObserver(DeteccionObserver observer) {
+    public synchronized void addObserver(DetectionObserver observer) {
         if (observer != null && !criticalObservers.contains(observer)) {
             observers.addIfAbsent(observer);
         }
     }
 
-    public synchronized void removeObserver(DeteccionObserver observer) {
+    public synchronized void removeObserver(DetectionObserver observer) {
         observers.remove(observer);
         criticalObservers.remove(observer);
     }
 
-    public synchronized void addCriticalObserver(DeteccionObserver observer) {
+    public synchronized void addCriticalObserver(DetectionObserver observer) {
         if (observer == null) return;
         observers.remove(observer);
         criticalObservers.addIfAbsent(observer);
     }
 
-    public void notifyObservers(DeteccionEvento evento) {
+    public void notifyObservers(DetectionEvent evento) {
         // La salida nunca debe publicarse antes de completar State y Strategy.
-        for (DeteccionObserver observer : criticalObservers) {
+        for (DetectionObserver observer : criticalObservers) {
             try {
                 observer.onDeteccion(evento);
             } catch (RuntimeException exception) {
@@ -39,7 +39,7 @@ public abstract class Subject {
                 throw new DetectionPipelineException("Fallo en etapa crítica de validación", exception);
             }
         }
-        for (DeteccionObserver observer : observers) {
+        for (DetectionObserver observer : observers) {
             try {
                 observer.onDeteccion(evento);
             } catch (RuntimeException exception) {
@@ -51,7 +51,7 @@ public abstract class Subject {
     /** Notifies optional observers that session state changed without an accepted detection. */
     public void notifyStateChanged(String sessionId) {
         if (sessionId == null || sessionId.isBlank()) return;
-        for (DeteccionObserver observer : observers) {
+        for (DetectionObserver observer : observers) {
             try {
                 observer.onStateChanged(sessionId);
             } catch (RuntimeException exception) {

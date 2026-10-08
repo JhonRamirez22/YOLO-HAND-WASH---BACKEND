@@ -1,21 +1,21 @@
 package com.handwash.service;
 
-import com.handwash.agent.Receptor;
+import com.handwash.agent.Receiver;
 import com.handwash.intention.HandPresenceWarmup;
-import com.handwash.model.DeteccionEvento;
-import com.handwash.model.AccionOms;
-import com.handwash.model.EvidenciaMovimiento;
-import com.handwash.model.EvidenciaPoseManos;
-import com.handwash.model.PasoLavado;
-import com.handwash.model.SesionLavado;
-import com.handwash.model.TipoProtocolo;
-import com.handwash.model.TipoInfraccion;
+import com.handwash.model.DetectionEvent;
+import com.handwash.model.OmsAction;
+import com.handwash.model.MovementEvidence;
+import com.handwash.model.HandPoseEvidence;
+import com.handwash.model.HandwashingStep;
+import com.handwash.model.HandwashingSession;
+import com.handwash.model.ProtocolType;
+import com.handwash.model.ViolationType;
 import com.handwash.observer.DetectionPipelineException;
 import com.handwash.repository.FailedAttemptStore;
 import com.handwash.security.SessionCredentialRegistry;
 import com.handwash.security.SessionPairingCodeRegistry;
 import com.handwash.service.persistence.FailedAttemptPersistenceCoordinator;
-import com.handwash.strategy.ReglaValidacionStrategyFactory;
+import com.handwash.strategy.ValidationRuleStrategyFactory;
 import jakarta.annotation.PreDestroy;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -44,8 +44,8 @@ public class SessionManager {
         NOT_FOUND, TERMINAL
     }
 
-    public record DetectionResult(DetectionOutcome outcome, DeteccionEvento event,
-                                  SesionLavado session, String detail,
+    public record DetectionResult(DetectionOutcome outcome, DetectionEvent event,
+                                  HandwashingSession session, String detail,
                                   HandwashMetrics.ProducerRejectionReason rejectionReason) {}
 
     public record ProducerEpochRegistration(String producerEpoch, int protocolVersion,
@@ -63,13 +63,13 @@ public class SessionManager {
 
     public record TokenIssue(String value, long expiresAtEpochMs) {}
 
-    private final Receptor receptor;
-    private final ReglaValidacionStrategyFactory strategyFactory;
+    private final Receiver receptor;
+    private final ValidationRuleStrategyFactory strategyFactory;
     private final FailedAttemptPersistenceCoordinator failedAttemptPersistence;
     private final HandwashMetrics metrics;
     private final OpenCvHandMotionEstimator handMotionEstimator;
     private static final Logger log = LoggerFactory.getLogger(SessionManager.class);
-    private final Map<String, SesionLavado> sesiones = new ConcurrentHashMap<>();
+    private final Map<String, HandwashingSession> sesiones = new ConcurrentHashMap<>();
     private final Map<String, HandPresenceWarmup> handPresenceWarmups = new ConcurrentHashMap<>();
     private final ProducerProtocolRegistry producerProtocolRegistry = new ProducerProtocolRegistry();
     private final SessionPairingCodeRegistry pairingCodeRegistry = new SessionPairingCodeRegistry();
@@ -103,27 +103,27 @@ public class SessionManager {
     @Value("${handwash.oms.input-enabled:false}")
     private boolean omsInputEnabled;
 
-    public SessionManager(Receptor receptor) {
-        this(receptor, new ReglaValidacionStrategyFactory(), null, HandwashMetrics.noop());
+    public SessionManager(Receiver receptor) {
+        this(receptor, new ValidationRuleStrategyFactory(), null, HandwashMetrics.noop());
     }
 
-    public SessionManager(Receptor receptor, ReglaValidacionStrategyFactory strategyFactory) {
+    public SessionManager(Receiver receptor, ValidationRuleStrategyFactory strategyFactory) {
         this(receptor, strategyFactory, null, HandwashMetrics.noop());
     }
 
-    public SessionManager(Receptor receptor, ReglaValidacionStrategyFactory strategyFactory,
+    public SessionManager(Receiver receptor, ValidationRuleStrategyFactory strategyFactory,
                           FailedAttemptStore failedAttemptRepository) {
         this(receptor, strategyFactory, failedAttemptRepository, HandwashMetrics.noop());
     }
 
-    public SessionManager(Receptor receptor, ReglaValidacionStrategyFactory strategyFactory,
+    public SessionManager(Receiver receptor, ValidationRuleStrategyFactory strategyFactory,
                           FailedAttemptStore failedAttemptRepository, HandwashMetrics metrics) {
         this(receptor, strategyFactory, failedAttemptRepository, metrics,
             new OpenCvHandMotionEstimator());
     }
 
     @Autowired
-    public SessionManager(Receptor receptor, ReglaValidacionStrategyFactory strategyFactory,
+    public SessionManager(Receiver receptor, ValidationRuleStrategyFactory strategyFactory,
                           FailedAttemptStore failedAttemptRepository, HandwashMetrics metrics,
                           OpenCvHandMotionEstimator handMotionEstimator) {
         this.receptor = receptor;
@@ -173,16 +173,16 @@ public class SessionManager {
         }
     }
 
-    public synchronized String crearSesion(TipoProtocolo protocolo) {
+    public synchronized String crearSesion(ProtocolType protocolo) {
         return crearSesion(protocolo, false);
     }
 
-    public synchronized String crearSesion(TipoProtocolo protocolo, boolean requireProducerEpoch) {
+    public synchronized String crearSesion(ProtocolType protocolo, boolean requireProducerEpoch) {
         if (sesiones.size() >= maxSessions) throw new SessionCapacityException();
         long sesionesActivas = sesiones.values().stream().filter(this::esActiva).count();
         if (sesionesActivas >= maxActiveSessions) throw new SessionCapacityException();
         String sessionId = UUID.randomUUID().toString();
-        SesionLavado sesion = new SesionLavado(
+        HandwashingSession sesion = new HandwashingSession(
             sessionId, protocolo, strategyFactory.crear(protocolo), maxDetectionGapMs,
             maxStepTransitionConfirmGapMs, omsModelReady);
         pairingCodeRegistry.register(sessionId);
@@ -197,7 +197,7 @@ public class SessionManager {
 
     /** Enables strict producer-envelope checks without changing a running v2 epoch. */
     public boolean requireProducerEpoch(String sessionId) {
-        SesionLavado sesion = sesiones.get(sessionId);
+        HandwashingSession sesion = sesiones.get(sessionId);
         if (sesion == null) return false;
         synchronized (sesion) {
             if (sesiones.get(sessionId) != sesion || !esActiva(sesion)) return false;
@@ -212,7 +212,7 @@ public class SessionManager {
     }
 
     public boolean producerEpochRequired(String sessionId) {
-        SesionLavado sesion = sesiones.get(sessionId);
+        HandwashingSession sesion = sesiones.get(sessionId);
         if (sesion == null) return false;
         synchronized (sesion) {
             return sesiones.get(sessionId) == sesion
@@ -222,7 +222,7 @@ public class SessionManager {
 
     /** Authenticates and registers atomically with device-token rotation for this session. */
     public ProducerEpochResult registrarProducerEpoch(String sessionId, String accessToken) {
-        SesionLavado sesion = sesiones.get(sessionId);
+        HandwashingSession sesion = sesiones.get(sessionId);
         if (sesion == null) {
             return new ProducerEpochResult(ProducerEpochOutcome.NOT_FOUND, null);
         }
@@ -249,25 +249,25 @@ public class SessionManager {
     }
 
     /** Solo se puede emparejar automáticamente cuando la elección no es ambigua. */
-    public SesionLavado getSesionActiva() {
-        List<SesionLavado> activas = getSesionesActivas();
+    public HandwashingSession getSesionActiva() {
+        List<HandwashingSession> activas = getSesionesActivas();
         return activas.size() == 1 ? activas.get(0) : null;
     }
 
-    public List<SesionLavado> getSesionesActivas() {
+    public List<HandwashingSession> getSesionesActivas() {
         return sesiones.values().stream().filter(this::esActiva).toList();
     }
 
     public String getCodigoEmparejamiento(String sessionId) {
-        SesionLavado sesion = sesiones.get(sessionId);
+        HandwashingSession sesion = sesiones.get(sessionId);
         if (sesion == null || !esActiva(sesion)) return null;
         return pairingCodeRegistry.displayCode(sessionId);
     }
 
-    public SesionLavado getSesionPorCodigo(String codigo) {
+    public HandwashingSession getSesionPorCodigo(String codigo) {
         if (codigo == null) return null;
         String sessionId = pairingCodeRegistry.findSessionId(codigo);
-        SesionLavado sesion = sessionId == null ? null : sesiones.get(sessionId);
+        HandwashingSession sesion = sessionId == null ? null : sesiones.get(sessionId);
         return sesion != null && esActiva(sesion) ? sesion : null;
     }
 
@@ -293,7 +293,7 @@ public class SessionManager {
 
     /** Issues a fresh one-day device capability after a valid pairing-code login. */
     public TokenIssue emitirTokenDispositivo(String sessionId) {
-        SesionLavado sesion = sesiones.get(sessionId);
+        HandwashingSession sesion = sesiones.get(sessionId);
         if (sesion == null) return null;
         synchronized (sesion) {
             if (sesiones.get(sessionId) != sesion || !esActiva(sesion)) return null;
@@ -304,7 +304,7 @@ public class SessionManager {
 
     /** Issues a read-only dashboard capability without changing producer credentials or epochs. */
     public TokenIssue emitirTokenDashboard(String sessionId) {
-        SesionLavado sesion = sesiones.get(sessionId);
+        HandwashingSession sesion = sesiones.get(sessionId);
         if (sesion == null) return null;
         synchronized (sesion) {
             if (sesiones.get(sessionId) != sesion || !esActiva(sesion)) return null;
@@ -361,22 +361,22 @@ public class SessionManager {
         return acceso != null && acceso.role() != AccessRole.LOCAL;
     }
 
-    private boolean esActiva(SesionLavado sesion) {
+    private boolean esActiva(HandwashingSession sesion) {
         synchronized (sesion) {
-            com.handwash.model.EstadoSesion estado = sesion.getEstadoSesion();
-            return estado != com.handwash.model.EstadoSesion.COMPLETADA
-                && estado != com.handwash.model.EstadoSesion.EXPIRADA;
+            com.handwash.model.HandwashingSessionState estado = sesion.getEstadoSesion();
+            return estado != com.handwash.model.HandwashingSessionState.COMPLETADA
+                && estado != com.handwash.model.HandwashingSessionState.EXPIRADA;
         }
     }
 
-    public SesionLavado getSesion(String sessionId) {
+    public HandwashingSession getSesion(String sessionId) {
         return sesiones.get(sessionId);
     }
 
     public boolean eliminarSesion(String sessionId) {
         if (sessionId == null) return true;
         return failedAttemptPersistence.deleteSession(sessionId, () -> {
-            SesionLavado sesion = sesiones.get(sessionId);
+            HandwashingSession sesion = sesiones.get(sessionId);
             if (sesion != null) {
                 synchronized (sesion) {
                     sesiones.remove(sessionId, sesion);
@@ -394,39 +394,39 @@ public class SessionManager {
         });
     }
 
-    public Map<String, SesionLavado> getSesiones() {
+    public Map<String, HandwashingSession> getSesiones() {
         return Map.copyOf(sesiones);
     }
 
     /** Snapshot para iteraciones de notificadores y métricas sin exponer la vista concurrente. */
-    public Map<String, SesionLavado> getSesionesSnapshot() {
+    public Map<String, HandwashingSession> getSesionesSnapshot() {
         return new HashMap<>(sesiones);
     }
 
-    public DeteccionEvento procesarDeteccion(String sessionId, String claseDetectada, float confianza) {
-        return procesarDeteccion(new DeteccionEvento(
+    public DetectionEvent procesarDeteccion(String sessionId, String claseDetectada, float confianza) {
+        return procesarDeteccion(new DetectionEvent(
             sessionId, claseDetectada, confianza, java.time.Instant.now().toString()));
     }
 
-    public String validarDeteccion(DeteccionEvento evento) {
+    public String validarDeteccion(DetectionEvent evento) {
         return receptor.validarEstructura(evento);
     }
 
-    public DeteccionEvento procesarDeteccion(DeteccionEvento evento) {
+    public DetectionEvent procesarDeteccion(DetectionEvent evento) {
         return procesarDeteccionInterna(evento, false, null, false).event();
     }
 
     /** Internal compatibility entry point for callers that already validated the structure. */
-    public DeteccionEvento procesarDeteccionValidada(DeteccionEvento evento) {
+    public DetectionEvent procesarDeteccionValidada(DetectionEvent evento) {
         return procesarDeteccionInterna(evento, true, null, false).event();
     }
 
     /** HTTP camera path: authenticate, validate producer ordering and process under one session lock. */
-    public DetectionResult procesarDeteccionHttp(DeteccionEvento evento, String accessToken) {
+    public DetectionResult procesarDeteccionHttp(DetectionEvent evento, String accessToken) {
         return procesarDeteccionInterna(evento, false, accessToken, true);
     }
 
-    private DetectionResult procesarDeteccionInterna(DeteccionEvento evento,
+    private DetectionResult procesarDeteccionInterna(DetectionEvent evento,
                                                       boolean estructuraValidada,
                                                       String accessToken,
                                                       boolean requireAuthorization) {
@@ -434,7 +434,7 @@ public class SessionManager {
             String error = estructuraValidada ? "sessionId es obligatorio" : validarYMedir(evento);
             return new DetectionResult(DetectionOutcome.INVALID, null, null, error, null);
         }
-        SesionLavado sesion = sesiones.get(evento.getSessionId());
+        HandwashingSession sesion = sesiones.get(evento.getSessionId());
         if (sesion == null) {
             return new DetectionResult(DetectionOutcome.NOT_FOUND, null, null, null, null);
         }
@@ -449,8 +449,8 @@ public class SessionManager {
                 && !tieneAcceso(evento.getSessionId(), accessToken, false)) {
                 return new DetectionResult(DetectionOutcome.UNAUTHORIZED, null, sesion, null, null);
             }
-            if (sesion.getEstadoSesion() == com.handwash.model.EstadoSesion.EXPIRADA
-                || sesion.getEstadoSesion() == com.handwash.model.EstadoSesion.COMPLETADA) {
+            if (sesion.getEstadoSesion() == com.handwash.model.HandwashingSessionState.EXPIRADA
+                || sesion.getEstadoSesion() == com.handwash.model.HandwashingSessionState.COMPLETADA) {
                 return new DetectionResult(DetectionOutcome.TERMINAL, null, sesion, null, null);
             }
 
@@ -487,7 +487,7 @@ public class SessionManager {
                 }
                 warmup.observe(evento.getFrameWatermark(), evento.getPresenceHandsVisible(),
                     evento.serverIngressAtMonotonicNanosOr(monotonicNanos.getAsLong()),
-                    sesion.getEstadoSesion() == com.handwash.model.EstadoSesion.EN_PROGRESO);
+                    sesion.getEstadoSesion() == com.handwash.model.HandwashingSessionState.EN_PROGRESO);
                 // Transport ACK only: this pulse never enters State, Strategy or Observer.
                 return new DetectionResult(DetectionOutcome.ACCEPTED, evento, sesion, null, null);
             }
@@ -500,7 +500,7 @@ public class SessionManager {
                 ? "PROTOCOLO_OMS" : "FRICCION_PARCIAL";
             if ("PROTOCOLO_OMS".equals(requestedMode) && !omsInputEnabled) {
                 evento.setEvidenciaPoseManos(null);
-                throw new ModoDeteccionIncompatibleException(requestedMode,
+                throw new IncompatibleDetectionModeException(requestedMode,
                     "La ingestión OMS está deshabilitada en este perfil: el modelo y la evidencia no están aprobados");
             }
             String validationError = estructuraValidada ? null : validarYMedir(evento);
@@ -528,13 +528,13 @@ public class SessionManager {
                     validationError, null);
             }
             if (!sesion.admiteModo(requestedMode)) {
-                throw new ModoDeteccionIncompatibleException(sesion.getModoEvaluacion());
+                throw new IncompatibleDetectionModeException(sesion.getModoEvaluacion());
             }
             HandPresenceWarmup presenceWarmup = handPresenceWarmups.get(evento.getSessionId());
             boolean serverPresenceReady = handPresenceWarmupMs == 0L
                 || (presenceWarmup != null && presenceWarmup.permitsStep(
                     monotonicNanos.getAsLong(),
-                    sesion.getEstadoSesion() == com.handwash.model.EstadoSesion.EN_PROGRESO));
+                    sesion.getEstadoSesion() == com.handwash.model.HandwashingSessionState.EN_PROGRESO));
             if (producerProtocolRegistry.isEpochRequired(evento.getSessionId())
                 && !isIndependentRiskAlert(evento) && !serverPresenceReady) {
                 metrics.recordIntentRejection("PRESENCIA_NO_ESTABILIZADA");
@@ -567,7 +567,7 @@ public class SessionManager {
             }
             long pipelineStarted = System.nanoTime();
             try {
-                DeteccionEvento procesado = receptor.recibirValidada(evento);
+                DetectionEvent procesado = receptor.recibirValidada(evento);
                 if (procesado != null) {
                     failedAttemptPersistence.markPending(sesion);
                     if (!esActiva(sesion)) handMotionEstimator.resetSession(evento.getSessionId());
@@ -583,7 +583,7 @@ public class SessionManager {
                 }
                 return new DetectionResult(DetectionOutcome.FILTERED, null, sesion, null, null);
             } catch (DetectionPipelineException error) {
-                sesion.registrarInfraccion(TipoInfraccion.ERROR_PROCESAMIENTO,
+                sesion.registrarInfraccion(ViolationType.ERROR_PROCESAMIENTO,
                     "La evaluación no pudo completarse; reinicia la sesión", null);
                 sesion.expirar();
                 metrics.recordExpiration(HandwashMetrics.ExpirationCause.PIPELINE_FAILURE);
@@ -596,36 +596,36 @@ public class SessionManager {
         }
     }
 
-    private String validarYMedir(DeteccionEvento evento) {
+    private String validarYMedir(DetectionEvent evento) {
         long started = System.nanoTime();
         String error = receptor.validarEstructura(evento);
         metrics.recordHttpValidation(System.nanoTime() - started, error == null);
         return error;
     }
 
-    private boolean isIndependentRiskAlert(DeteccionEvento evento) {
+    private boolean isIndependentRiskAlert(DetectionEvent evento) {
         var action = evento.getAccionOmsResuelta();
         return action != null && action.esRiesgo();
     }
 
-    private boolean requiresBilateralMotionEvidence(DeteccionEvento evento) {
+    private boolean requiresBilateralMotionEvidence(DetectionEvent evento) {
         if (!"DETECTION".equals(evento.getEventType())) return false;
-        PasoLavado step = evento.getPasoLavadoResuelto();
-        if (step != null) return step != PasoLavado.FONDO;
-        AccionOms action = evento.getAccionOmsResuelta();
+        HandwashingStep step = evento.getPasoLavadoResuelto();
+        if (step != null) return step != HandwashingStep.FONDO;
+        OmsAction action = evento.getAccionOmsResuelta();
         return action != null && !action.esRiesgo() && !action.esSinEvidencia();
     }
 
-    private boolean isSpatialResetSignal(DeteccionEvento evento) {
-        PasoLavado step = evento.getPasoLavadoResuelto();
-        if (step == PasoLavado.FONDO) return true;
-        AccionOms action = evento.getAccionOmsResuelta();
+    private boolean isSpatialResetSignal(DetectionEvent evento) {
+        HandwashingStep step = evento.getPasoLavadoResuelto();
+        if (step == HandwashingStep.FONDO) return true;
+        OmsAction action = evento.getAccionOmsResuelta();
         return action != null && (action.esRiesgo() || action.esSinEvidencia());
     }
 
-    private String recalculateMovementEvidence(DeteccionEvento evento) {
-        EvidenciaMovimiento producerEvidence = evento.getEvidenciaMovimiento();
-        EvidenciaPoseManos pose = evento.getEvidenciaPoseManos();
+    private String recalculateMovementEvidence(DetectionEvent evento) {
+        MovementEvidence producerEvidence = evento.getEvidenciaMovimiento();
+        HandPoseEvidence pose = evento.getEvidenciaPoseManos();
         Long frameSequence = evento.getFrameSequence();
         if (producerEvidence == null || pose == null || frameSequence == null
             || !frameSequence.equals(producerEvidence.secuencia())
@@ -639,14 +639,14 @@ public class SessionManager {
             ingressNanos, pose);
         evento.setEvidenciaPoseManos(null);
         if (!estimate.valid()) return "OpenCV no pudo medir movimiento bilateral reciente";
-        evento.setEvidenciaMovimiento(new EvidenciaMovimiento(frameSequence,
+        evento.setEvidenciaMovimiento(new MovementEvidence(frameSequence,
             estimate.visibleHands(), estimate.movementNormalized(), true,
             producerEvidence.antiguedadMs()));
         return null;
     }
 
     /** Queue a dashboard refresh for a state-only change, without re-running the Observer pipeline. */
-    public void notificarCambioEstado(SesionLavado sesion) {
+    public void notificarCambioEstado(HandwashingSession sesion) {
         if (sesion == null) return;
         String sessionId = sesion.getSessionId();
         synchronized (sesion) {
@@ -687,10 +687,10 @@ public class SessionManager {
         long ahoraNanos = System.nanoTime();
         List<String> expiradas = sesiones.entrySet().stream()
             .filter(entry -> {
-                SesionLavado sesion = entry.getValue();
+                HandwashingSession sesion = entry.getValue();
                 synchronized (sesion) {
-                    boolean terminal = sesion.getEstadoSesion() == com.handwash.model.EstadoSesion.COMPLETADA
-                        || sesion.getEstadoSesion() == com.handwash.model.EstadoSesion.EXPIRADA;
+                    boolean terminal = sesion.getEstadoSesion() == com.handwash.model.HandwashingSessionState.COMPLETADA
+                        || sesion.getEstadoSesion() == com.handwash.model.HandwashingSessionState.EXPIRADA;
                     return terminal
                         && sesion.getTiempoInactivoMs(ahora, ahoraNanos) >= retentionMs;
                 }

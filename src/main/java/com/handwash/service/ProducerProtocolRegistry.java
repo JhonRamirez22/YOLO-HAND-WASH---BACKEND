@@ -1,8 +1,8 @@
 package com.handwash.service;
 
-import com.handwash.model.DeteccionEvento;
-import com.handwash.model.AccionOms;
-import com.handwash.model.PasoLavado;
+import com.handwash.model.DetectionEvent;
+import com.handwash.model.OmsAction;
+import com.handwash.model.HandwashingStep;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.Set;
@@ -91,7 +91,7 @@ public final class ProducerProtocolRegistry {
      * timestamp, or other rejected observation therefore cannot be repaired
      * and replayed under the same frame sequence.
      */
-    public Assessment assessAndReserve(String sessionId, DeteccionEvento event) {
+    public Assessment assessAndReserve(String sessionId, DetectionEvent event) {
         StreamState state = streams.get(sessionId);
         if (state == null) {
             return new Assessment(hasV2Fields(event)
@@ -129,7 +129,7 @@ public final class ProducerProtocolRegistry {
     }
 
     private HandwashMetrics.ProducerRejectionReason rejectionReason(
-        StreamState state, DeteccionEvento event) {
+        StreamState state, DetectionEvent event) {
         if (!state.epochRequired) {
             return hasV2Fields(event)
                 ? HandwashMetrics.ProducerRejectionReason.VERSIONED_FIELDS_ON_LEGACY_SESSION
@@ -284,7 +284,7 @@ public final class ProducerProtocolRegistry {
         return null;
     }
 
-    private boolean hasV2Fields(DeteccionEvento event) {
+    private boolean hasV2Fields(DetectionEvent event) {
         return event.getProducerEpoch() != null || event.getEventType() != null
             || event.getFrameSequence() != null || event.getControlSequence() != null
             || event.getFrameWatermark() != null || event.getCaptureAgeMs() != null
@@ -293,13 +293,13 @@ public final class ProducerProtocolRegistry {
 
     private static Set<String> buildCanonicalDetectionClasses() {
         Set<String> classes = new java.util.HashSet<>();
-        Arrays.stream(PasoLavado.values())
-            .filter(step -> step != PasoLavado.FONDO)
+        Arrays.stream(HandwashingStep.values())
+            .filter(step -> step != HandwashingStep.FONDO)
             .map(Enum::name)
             .forEach(classes::add);
-        Arrays.stream(AccionOms.values())
+        Arrays.stream(OmsAction.values())
             .filter(action -> !action.esSinEvidencia())
-            .map(AccionOms::getClaseModelo)
+            .map(OmsAction::getClaseModelo)
             .forEach(classes::add);
         return Set.copyOf(classes);
     }

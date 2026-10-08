@@ -1,7 +1,7 @@
 package com.handwash.service;
 
-import com.handwash.agent.Receptor;
-import com.handwash.model.TipoProtocolo;
+import com.handwash.agent.Receiver;
+import com.handwash.model.ProtocolType;
 import com.handwash.security.SessionAuthenticationService;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -17,9 +17,9 @@ import static org.junit.jupiter.api.Assertions.*;
 class SessionManagerConcurrencyTest {
     @Test
     void activeSessionFallsBackWhenLatestSessionTerminates() {
-        SessionManager manager = new SessionManager(new Receptor());
-        String first = manager.crearSesion(TipoProtocolo.DOMESTICO);
-        String latest = manager.crearSesion(TipoProtocolo.CLINICO_QUIRURGICO);
+        SessionManager manager = new SessionManager(new Receiver());
+        String first = manager.crearSesion(ProtocolType.DOMESTICO);
+        String latest = manager.crearSesion(ProtocolType.CLINICO_QUIRURGICO);
         assertNull(manager.getSesionActiva(), "Dos sesiones activas no se deben elegir arbitrariamente");
         manager.getSesion(latest).expirar();
 
@@ -30,15 +30,15 @@ class SessionManagerConcurrencyTest {
 
     @Test
     void activeSessionLimitAllowsOnlyOneLiveWashButRetainsTerminalHistory() {
-        SessionManager manager = new SessionManager(new Receptor());
+        SessionManager manager = new SessionManager(new Receiver());
         ReflectionTestUtils.setField(manager, "maxActiveSessions", 1);
-        String first = manager.crearSesion(TipoProtocolo.DOMESTICO);
+        String first = manager.crearSesion(ProtocolType.DOMESTICO);
 
         assertThrows(SessionCapacityException.class,
-            () -> manager.crearSesion(TipoProtocolo.DOMESTICO));
+            () -> manager.crearSesion(ProtocolType.DOMESTICO));
 
         manager.getSesion(first).expirar();
-        String next = manager.crearSesion(TipoProtocolo.DOMESTICO);
+        String next = manager.crearSesion(ProtocolType.DOMESTICO);
         assertNotEquals(first, next);
         assertEquals(2, manager.getSesiones().size(),
             "la sesión terminal permanece disponible durante su retención configurada");
@@ -50,7 +50,7 @@ class SessionManagerConcurrencyTest {
 
     @Test
     void concurrentCreationCannotExceedActiveStationSessionLimit() throws Exception {
-        SessionManager manager = new SessionManager(new Receptor());
+        SessionManager manager = new SessionManager(new Receiver());
         ReflectionTestUtils.setField(manager, "maxActiveSessions", 1);
         CountDownLatch start = new CountDownLatch(1);
         AtomicInteger created = new AtomicInteger();
@@ -58,7 +58,7 @@ class SessionManagerConcurrencyTest {
         Runnable create = () -> {
             try {
                 start.await();
-                manager.crearSesion(TipoProtocolo.DOMESTICO);
+                manager.crearSesion(ProtocolType.DOMESTICO);
                 created.incrementAndGet();
             } catch (SessionCapacityException expected) {
                 limited.incrementAndGet();
@@ -83,9 +83,9 @@ class SessionManagerConcurrencyTest {
 
     @Test
     void pairingCodesAreUniqueAndOnlyResolveActiveSessions() {
-        SessionManager manager = new SessionManager(new Receptor());
-        String first = manager.crearSesion(TipoProtocolo.DOMESTICO);
-        String second = manager.crearSesion(TipoProtocolo.DOMESTICO);
+        SessionManager manager = new SessionManager(new Receiver());
+        String first = manager.crearSesion(ProtocolType.DOMESTICO);
+        String second = manager.crearSesion(ProtocolType.DOMESTICO);
         String firstCode = manager.getCodigoEmparejamiento(first);
         String secondCode = manager.getCodigoEmparejamiento(second);
 
@@ -103,8 +103,8 @@ class SessionManagerConcurrencyTest {
 
     @Test
     void ownerAndDeviceTokensHaveDifferentPrivilegesAndAreRevokedOnDeletion() {
-        SessionManager manager = new SessionManager(new Receptor());
-        String id = manager.crearSesion(TipoProtocolo.DOMESTICO);
+        SessionManager manager = new SessionManager(new Receiver());
+        String id = manager.crearSesion(ProtocolType.DOMESTICO);
         String owner = manager.getOwnerToken(id);
         String device = manager.getDeviceToken(id);
 
@@ -125,8 +125,8 @@ class SessionManagerConcurrencyTest {
 
     @Test
     void revokedDeviceTokenCannotRegisterEpochAfterV2Relogin() {
-        SessionManager manager = new SessionManager(new Receptor());
-        String id = manager.crearSesion(TipoProtocolo.DOMESTICO);
+        SessionManager manager = new SessionManager(new Receiver());
+        String id = manager.crearSesion(ProtocolType.DOMESTICO);
         String pairingCode = manager.getCodigoEmparejamiento(id);
         String oldDeviceToken = manager.getDeviceToken(id);
         SessionAuthenticationService authentication = new SessionAuthenticationService(manager);
@@ -147,7 +147,7 @@ class SessionManagerConcurrencyTest {
 
     @Test
     void concurrentCreationCannotExceedConfiguredSessionLimit() throws Exception {
-        SessionManager manager = new SessionManager(new Receptor());
+        SessionManager manager = new SessionManager(new Receiver());
         ReflectionTestUtils.setField(manager, "maxSessions", 1);
         CountDownLatch start = new CountDownLatch(1);
         AtomicInteger created = new AtomicInteger();
@@ -155,7 +155,7 @@ class SessionManagerConcurrencyTest {
         Runnable create = () -> {
             try {
                 start.await();
-                manager.crearSesion(TipoProtocolo.DOMESTICO);
+                manager.crearSesion(ProtocolType.DOMESTICO);
                 created.incrementAndGet();
             } catch (SessionCapacityException expected) {
                 limited.incrementAndGet();
@@ -180,9 +180,9 @@ class SessionManagerConcurrencyTest {
 
     @Test
     void removedSessionCannotReceiveFurtherDetections() {
-        Receptor receptor = new Receptor();
+        Receiver receptor = new Receiver();
         SessionManager manager = new SessionManager(receptor);
-        String sessionId = manager.crearSesion(TipoProtocolo.DOMESTICO);
+        String sessionId = manager.crearSesion(ProtocolType.DOMESTICO);
         manager.eliminarSesion(sessionId);
 
         assertNull(manager.procesarDeteccion(sessionId, "Paso1_Palmas", 0.9f));
@@ -191,9 +191,9 @@ class SessionManagerConcurrencyTest {
 
     @Test
     void serializesFullObserverPipelineForTheSameSession() throws Exception {
-        Receptor receptor = new Receptor();
+        Receiver receptor = new Receiver();
         SessionManager manager = new SessionManager(receptor);
-        String sessionId = manager.crearSesion(TipoProtocolo.DOMESTICO);
+        String sessionId = manager.crearSesion(ProtocolType.DOMESTICO);
         AtomicInteger processing = new AtomicInteger();
         AtomicInteger maximumConcurrent = new AtomicInteger();
         receptor.addObserver(event -> {

@@ -1,9 +1,9 @@
 package com.handwash.websocket;
 
-import com.handwash.agent.Notificador;
-import com.handwash.agent.Receptor;
-import com.handwash.model.SesionLavado;
-import com.handwash.model.TipoProtocolo;
+import com.handwash.agent.Notifier;
+import com.handwash.agent.Receiver;
+import com.handwash.model.HandwashingSession;
+import com.handwash.model.ProtocolType;
 import com.handwash.security.WebSocketTicketRegistry;
 import com.handwash.security.WebSocketTicketService;
 import com.handwash.service.SessionManager;
@@ -23,10 +23,10 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 class HandWashWebSocketHandlerTest {
     @Test
     void rejectedSocketIsClosedAfterReleasingSessionMonitor() throws Exception {
-        SessionManager sessions = new SessionManager(new Receptor());
-        String sessionId = sessions.crearSesion(TipoProtocolo.DOMESTICO);
-        SesionLavado sessionState = sessions.getSesion(sessionId);
-        Notificador notifier = new Notificador(sessions);
+        SessionManager sessions = new SessionManager(new Receiver());
+        String sessionId = sessions.crearSesion(ProtocolType.DOMESTICO);
+        HandwashingSession sessionState = sessions.getSesion(sessionId);
+        Notifier notifier = new Notifier(sessions);
         WebSocketTicketService tickets = new WebSocketTicketService(
             sessions, new WebSocketTicketRegistry());
         HandWashWebSocketHandler handler = new HandWashWebSocketHandler(sessions, notifier, tickets);

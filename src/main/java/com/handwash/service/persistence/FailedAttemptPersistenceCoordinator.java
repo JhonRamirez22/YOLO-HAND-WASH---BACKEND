@@ -1,7 +1,7 @@
 package com.handwash.service.persistence;
 
-import com.handwash.model.IntentoLavadoResumen;
-import com.handwash.model.SesionLavado;
+import com.handwash.model.HandwashingAttemptSummary;
+import com.handwash.model.HandwashingSession;
 import com.handwash.repository.FailedAttemptStore;
 import com.handwash.service.HandwashMetrics;
 import org.slf4j.Logger;
@@ -33,7 +33,7 @@ public final class FailedAttemptPersistenceCoordinator {
     }
 
     private final FailedAttemptStore store;
-    private final Function<String, SesionLavado> sessionLookup;
+    private final Function<String, HandwashingSession> sessionLookup;
     private final LongSupplier monotonicNanos;
     private final HandwashMetrics metrics;
     private final Map<String, Integer> persistedThroughBySession = new ConcurrentHashMap<>();
@@ -43,14 +43,14 @@ public final class FailedAttemptPersistenceCoordinator {
 
     public FailedAttemptPersistenceCoordinator(
         FailedAttemptStore store,
-        Function<String, SesionLavado> sessionLookup
+        Function<String, HandwashingSession> sessionLookup
     ) {
         this(store, sessionLookup, System::nanoTime, HandwashMetrics.noop());
     }
 
     public FailedAttemptPersistenceCoordinator(
         FailedAttemptStore store,
-        Function<String, SesionLavado> sessionLookup,
+        Function<String, HandwashingSession> sessionLookup,
         HandwashMetrics metrics
     ) {
         this(store, sessionLookup, System::nanoTime, metrics);
@@ -58,7 +58,7 @@ public final class FailedAttemptPersistenceCoordinator {
 
     FailedAttemptPersistenceCoordinator(
         FailedAttemptStore store,
-        Function<String, SesionLavado> sessionLookup,
+        Function<String, HandwashingSession> sessionLookup,
         LongSupplier monotonicNanos
     ) {
         this(store, sessionLookup, monotonicNanos, HandwashMetrics.noop());
@@ -66,7 +66,7 @@ public final class FailedAttemptPersistenceCoordinator {
 
     FailedAttemptPersistenceCoordinator(
         FailedAttemptStore store,
-        Function<String, SesionLavado> sessionLookup,
+        Function<String, HandwashingSession> sessionLookup,
         LongSupplier monotonicNanos,
         HandwashMetrics metrics
     ) {
@@ -77,7 +77,7 @@ public final class FailedAttemptPersistenceCoordinator {
     }
 
     /** Called while the session pipeline owns the session monitor; does no I/O. */
-    public void markPending(SesionLavado session) {
+    public void markPending(HandwashingSession session) {
         if (store == null || session == null) return;
         synchronized (session) {
             String sessionId = session.getSessionId();
@@ -147,14 +147,14 @@ public final class FailedAttemptPersistenceCoordinator {
         return withPersistenceLock(sessionId, () -> {
             if (!force && !retryDelayElapsed(sessionId, monotonicNanos.getAsLong())) return false;
 
-            SesionLavado session = sessionLookup.apply(sessionId);
+            HandwashingSession session = sessionLookup.apply(sessionId);
             if (session == null) {
                 pendingSessions.remove(sessionId);
                 return false;
             }
 
             int persistedThrough = persistedThroughBySession.getOrDefault(sessionId, 0);
-            List<IntentoLavadoResumen> attempts;
+            List<HandwashingAttemptSummary> attempts;
             synchronized (session) {
                 if (sessionLookup.apply(sessionId) != session) {
                     pendingSessions.remove(sessionId);
@@ -164,7 +164,7 @@ public final class FailedAttemptPersistenceCoordinator {
             }
 
             try {
-                for (IntentoLavadoResumen attempt : attempts) {
+                for (HandwashingAttemptSummary attempt : attempts) {
                     if (attempt.numero() <= persistedThrough) continue;
                     store.insertIfAbsent(sessionId, attempt);
                     persistedThrough = Math.max(persistedThrough, attempt.numero());

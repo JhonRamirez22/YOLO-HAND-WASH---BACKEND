@@ -1,6 +1,6 @@
 package com.handwash.observer;
 
-import com.handwash.agent.Receptor;
+import com.handwash.agent.Receiver;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -11,8 +11,8 @@ class SubjectTest {
 
     @Test
     void doesNotRegisterDuplicateObservers() {
-        Receptor receptor = new Receptor();
-        DeteccionObserver observer = evento -> {};
+        Receiver receptor = new Receiver();
+        DetectionObserver observer = evento -> {};
 
         receptor.addObserver(observer);
         receptor.addObserver(observer);
@@ -22,8 +22,8 @@ class SubjectTest {
 
     @Test
     void promotesAnObserverToCriticalWithoutDuplicatingIt() {
-        Receptor receptor = new Receptor();
-        DeteccionObserver observer = evento -> {};
+        Receiver receptor = new Receiver();
+        DetectionObserver observer = evento -> {};
 
         receptor.addObserver(observer);
         receptor.addCriticalObserver(observer);
@@ -34,7 +34,7 @@ class SubjectTest {
 
     @Test
     void criticalObserversAlwaysRunBeforeOptionalObservers() {
-        Receptor receptor = new Receptor();
+        Receiver receptor = new Receiver();
         StringBuilder order = new StringBuilder();
         receptor.addObserver(evento -> order.append("optional;"));
         receptor.addCriticalObserver(evento -> order.append("critical;"));
@@ -46,7 +46,7 @@ class SubjectTest {
 
     @Test
     void oneObserverFailureDoesNotStopThePipeline() {
-        Receptor receptor = new Receptor();
+        Receiver receptor = new Receiver();
         int[] notifications = {0};
         receptor.addObserver(evento -> { throw new IllegalStateException("simulated consumer failure"); });
         receptor.addObserver(evento -> notifications[0]++);
@@ -57,7 +57,7 @@ class SubjectTest {
 
     @Test
     void criticalObserverFailureStopsLaterStages() {
-        Receptor receptor = new Receptor();
+        Receiver receptor = new Receiver();
         int[] notifications = {0};
         receptor.addObserver(evento -> notifications[0]++);
         receptor.addCriticalObserver(evento -> { throw new IllegalStateException("validator failed"); });

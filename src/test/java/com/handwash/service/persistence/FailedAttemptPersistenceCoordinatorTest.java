@@ -1,8 +1,8 @@
 package com.handwash.service.persistence;
 
-import com.handwash.model.IntentoLavadoResumen;
-import com.handwash.model.SesionLavado;
-import com.handwash.model.TipoProtocolo;
+import com.handwash.model.HandwashingAttemptSummary;
+import com.handwash.model.HandwashingSession;
+import com.handwash.model.ProtocolType;
 import com.handwash.repository.FailedAttemptStore;
 import com.handwash.service.HandwashMetrics;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -33,11 +33,11 @@ class FailedAttemptPersistenceCoordinatorTest {
         FakeSession session = new FakeSession(sessionId, List.of(sampleAttempt()));
         FailedAttemptStore store = new FailedAttemptStore() {
             @Override
-            public void insertIfAbsent(String ignored, IntentoLavadoResumen attempt) {
+            public void insertIfAbsent(String ignored, HandwashingAttemptSummary attempt) {
                 throw new DataAccessResourceFailureException("private database detail");
             }
 
-            @Override public List<IntentoLavadoResumen> findBySession(String ignored) { return List.of(); }
+            @Override public List<HandwashingAttemptSummary> findBySession(String ignored) { return List.of(); }
 
             @Override
             public int deleteBySession(String ignored) {
@@ -76,13 +76,13 @@ class FailedAttemptPersistenceCoordinatorTest {
         AtomicInteger writes = new AtomicInteger();
         FailedAttemptStore store = new FailedAttemptStore() {
             @Override
-            public void insertIfAbsent(String ignored, IntentoLavadoResumen attempt) {
+            public void insertIfAbsent(String ignored, HandwashingAttemptSummary attempt) {
                 if (writes.incrementAndGet() == 1) {
                     throw new DataAccessResourceFailureException("temporary database failure");
                 }
             }
 
-            @Override public List<IntentoLavadoResumen> findBySession(String ignored) { return List.of(); }
+            @Override public List<HandwashingAttemptSummary> findBySession(String ignored) { return List.of(); }
             @Override public int deleteBySession(String ignored) { return 0; }
             @Override public int deleteCreatedBefore(long ignored, Set<String> retained) { return 0; }
         };
@@ -112,8 +112,8 @@ class FailedAttemptPersistenceCoordinatorTest {
         AtomicBoolean persistedRow = new AtomicBoolean(true);
         AtomicBoolean removedSession = new AtomicBoolean();
         FailedAttemptStore store = new FailedAttemptStore() {
-            @Override public void insertIfAbsent(String ignored, IntentoLavadoResumen attempt) {}
-            @Override public List<IntentoLavadoResumen> findBySession(String ignored) { return List.of(); }
+            @Override public void insertIfAbsent(String ignored, HandwashingAttemptSummary attempt) {}
+            @Override public List<HandwashingAttemptSummary> findBySession(String ignored) { return List.of(); }
             @Override public int deleteBySession(String ignored) {
                 if (deletes.incrementAndGet() == 1) {
                     throw new DataAccessResourceFailureException("temporary database failure");
@@ -146,7 +146,7 @@ class FailedAttemptPersistenceCoordinatorTest {
         AtomicBoolean sessionRemoved = new AtomicBoolean(false);
         FailedAttemptStore store = new FailedAttemptStore() {
             @Override
-            public void insertIfAbsent(String ignored, IntentoLavadoResumen attempt) {
+            public void insertIfAbsent(String ignored, HandwashingAttemptSummary attempt) {
                 rowExists.set(true);
                 writeEntered.countDown();
                 try {
@@ -159,7 +159,7 @@ class FailedAttemptPersistenceCoordinatorTest {
                 }
             }
 
-            @Override public List<IntentoLavadoResumen> findBySession(String ignored) { return List.of(); }
+            @Override public List<HandwashingAttemptSummary> findBySession(String ignored) { return List.of(); }
             @Override public int deleteBySession(String ignored) {
                 rowExists.set(false);
                 return 1;
@@ -192,21 +192,21 @@ class FailedAttemptPersistenceCoordinatorTest {
         assertEquals(true, sessionRemoved.get());
     }
 
-    private IntentoLavadoResumen sampleAttempt() {
-        return new IntentoLavadoResumen(1, "REINICIADO", "PASO_FUERA_DE_SECUENCIA",
+    private HandwashingAttemptSummary sampleAttempt() {
+        return new HandwashingAttemptSummary(1, "REINICIADO", "PASO_FUERA_DE_SECUENCIA",
             1_000L, Map.of(), List.of());
     }
 
-    private static final class FakeSession extends SesionLavado {
-        private final List<IntentoLavadoResumen> attempts;
+    private static final class FakeSession extends HandwashingSession {
+        private final List<HandwashingAttemptSummary> attempts;
 
-        private FakeSession(String sessionId, List<IntentoLavadoResumen> attempts) {
-            super(sessionId, TipoProtocolo.DOMESTICO);
+        private FakeSession(String sessionId, List<HandwashingAttemptSummary> attempts) {
+            super(sessionId, ProtocolType.DOMESTICO);
             this.attempts = new ArrayList<>(attempts);
         }
 
         @Override
-        public synchronized List<IntentoLavadoResumen> getIntentosAnteriores() {
+        public synchronized List<HandwashingAttemptSummary> getIntentosAnteriores() {
             return List.copyOf(attempts);
         }
 

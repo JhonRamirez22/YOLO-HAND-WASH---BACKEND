@@ -1,10 +1,10 @@
 package com.handwash.controller;
 
 import tools.jackson.databind.ObjectMapper;
-import com.handwash.model.EstadoSesion;
-import com.handwash.model.PasoLavado;
-import com.handwash.model.SesionLavado;
-import com.handwash.model.TipoProtocolo;
+import com.handwash.model.HandwashingSessionState;
+import com.handwash.model.HandwashingStep;
+import com.handwash.model.HandwashingSession;
+import com.handwash.model.ProtocolType;
 import com.handwash.service.SessionManager;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -73,7 +73,7 @@ class DetectionApiPerformanceBaselineBenchmark {
             warmEndpoint(rejected, "PASO_1_PALMAS");
             List<Double> rejectedMs = new ArrayList<>(REQUEST_SAMPLES);
             for (int i = 1; i <= REQUEST_SAMPLES; i++) {
-                TimedResponse response = post(rejected, PasoLavado.PASO_1_PALMAS.name(), 0.10,
+                TimedResponse response = post(rejected, HandwashingStep.PASO_1_PALMAS.name(), 0.10,
                     null, i);
                 assertEquals(200, response.statusCode());
                 assertTrue(response.body().contains("\"accepted\":false"));
@@ -107,13 +107,13 @@ class DetectionApiPerformanceBaselineBenchmark {
             List<Double> activeStepMs = new ArrayList<>(REQUEST_SAMPLES);
             long sequence = 4;
             for (int i = 0; i < REQUEST_SAMPLES; i++) {
-                TimedResponse response = post(active, PasoLavado.PASO_1_PALMAS.name(), 0.95,
+                TimedResponse response = post(active, HandwashingStep.PASO_1_PALMAS.name(), 0.95,
                     movement(sequence), sequence++);
                 assertEquals(200, response.statusCode());
                 assertTrue(response.body().contains("\"accepted\":true"));
                 activeStepMs.add(response.elapsedMs());
             }
-            assertEquals(EstadoSesion.EN_PROGRESO,
+            assertEquals(HandwashingSessionState.EN_PROGRESO,
                 sessionManager.getSesion(active.id()).getEstadoSesion());
             report.put("valid_evidence_active_step", distribution(activeStepMs));
         } finally {
@@ -136,7 +136,7 @@ class DetectionApiPerformanceBaselineBenchmark {
             List<Long> firstCandidateNs = new ArrayList<>(CONFIRMATION_SAMPLES);
             for (Session session : transitionSessions) {
                 firstCandidateNs.add(System.nanoTime());
-                TimedResponse first = post(session, PasoLavado.PASO_2_DORSOS.name(), 0.95,
+                TimedResponse first = post(session, HandwashingStep.PASO_2_DORSOS.name(), 0.95,
                     movement(10), 10);
                 assertEquals(200, first.statusCode());
                 transitionRequestMs.add(first.elapsedMs());
@@ -144,12 +144,12 @@ class DetectionApiPerformanceBaselineBenchmark {
             Thread.sleep(125L);
             for (int i = 0; i < transitionSessions.size(); i++) {
                 Session session = transitionSessions.get(i);
-                TimedResponse second = post(session, PasoLavado.PASO_2_DORSOS.name(), 0.95,
+                TimedResponse second = post(session, HandwashingStep.PASO_2_DORSOS.name(), 0.95,
                     movement(11), 11);
                 assertEquals(200, second.statusCode());
                 transitionRequestMs.add(second.elapsedMs());
                 transitionElapsedMs.add((System.nanoTime() - firstCandidateNs.get(i)) / 1_000_000.0);
-                assertEquals(PasoLavado.PASO_2_DORSOS,
+                assertEquals(HandwashingStep.PASO_2_DORSOS,
                     sessionManager.getSesion(session.id()).getEstadoActual().getPasoActual());
             }
             report.put("transition_confirmation_request", distribution(transitionRequestMs));
@@ -257,7 +257,7 @@ class DetectionApiPerformanceBaselineBenchmark {
     private TimedResponse postTransportEnvelope(Session session, long sequence) throws Exception {
         Map<String, Object> event = new LinkedHashMap<>();
         event.put("sessionId", session.id());
-        event.put("claseDetectada", PasoLavado.PASO_1_PALMAS.name());
+        event.put("claseDetectada", HandwashingStep.PASO_1_PALMAS.name());
         event.put("confianza", 0.95);
         event.put("timestamp", DateTimeFormatter.ISO_INSTANT.withZone(ZoneId.of("UTC"))
             .format(Instant.now()));
@@ -284,14 +284,14 @@ class DetectionApiPerformanceBaselineBenchmark {
         List<Long> firstPostNs = new ArrayList<>(sessions.size());
         for (Session session : sessions) {
             firstPostNs.add(System.nanoTime());
-            TimedResponse response = post(session, PasoLavado.PASO_1_PALMAS.name(), 0.95,
+            TimedResponse response = post(session, HandwashingStep.PASO_1_PALMAS.name(), 0.95,
                 movement(1), 1);
             assertEquals(200, response.statusCode());
             requestMs.add(response.elapsedMs());
         }
         Thread.sleep(350L);
         for (Session session : sessions) {
-            TimedResponse response = post(session, PasoLavado.PASO_1_PALMAS.name(), 0.95,
+            TimedResponse response = post(session, HandwashingStep.PASO_1_PALMAS.name(), 0.95,
                 movement(2), 2);
             assertEquals(200, response.statusCode());
             requestMs.add(response.elapsedMs());
@@ -300,13 +300,13 @@ class DetectionApiPerformanceBaselineBenchmark {
         List<Double> confirmedMs = new ArrayList<>(sessions.size());
         for (int i = 0; i < sessions.size(); i++) {
             Session session = sessions.get(i);
-            TimedResponse response = post(session, PasoLavado.PASO_1_PALMAS.name(), 0.95,
+            TimedResponse response = post(session, HandwashingStep.PASO_1_PALMAS.name(), 0.95,
                 movement(3), 3);
             assertEquals(200, response.statusCode());
             assertTrue(response.body().contains("\"accepted\":true"));
             requestMs.add(response.elapsedMs());
             confirmedMs.add((System.nanoTime() - firstPostNs.get(i)) / 1_000_000.0);
-            assertEquals(PasoLavado.PASO_1_PALMAS,
+            assertEquals(HandwashingStep.PASO_1_PALMAS,
                 sessionManager.getSesion(session.id()).getEstadoActual().getPasoActual());
         }
         return Map.of(
@@ -324,7 +324,7 @@ class DetectionApiPerformanceBaselineBenchmark {
             Thread.sleep(1_000L);
             for (Session session : sessions) {
                 long sequence = 4L + round;
-                TimedResponse response = post(session, PasoLavado.PASO_1_PALMAS.name(), 0.95,
+                TimedResponse response = post(session, HandwashingStep.PASO_1_PALMAS.name(), 0.95,
                     movement(sequence), sequence);
                 assertEquals(200, response.statusCode());
             }
@@ -332,7 +332,7 @@ class DetectionApiPerformanceBaselineBenchmark {
     }
 
     private Session newSession() {
-        String id = sessionManager.crearSesion(TipoProtocolo.DOMESTICO);
+        String id = sessionManager.crearSesion(ProtocolType.DOMESTICO);
         return new Session(id, sessionManager.getOwnerToken(id), null);
     }
 
@@ -343,7 +343,7 @@ class DetectionApiPerformanceBaselineBenchmark {
     }
 
     private Session newProducerSession() {
-        String id = sessionManager.crearSesion(TipoProtocolo.DOMESTICO, true);
+        String id = sessionManager.crearSesion(ProtocolType.DOMESTICO, true);
         String token = sessionManager.getOwnerToken(id);
         SessionManager.ProducerEpochResult result = sessionManager.registrarProducerEpoch(id, token);
         if (result.outcome() != SessionManager.ProducerEpochOutcome.REGISTERED) {

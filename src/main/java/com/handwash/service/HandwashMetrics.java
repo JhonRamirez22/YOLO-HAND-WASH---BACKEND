@@ -7,8 +7,8 @@ import io.micrometer.core.instrument.Timer;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import com.handwash.model.PasoLavado;
-import com.handwash.model.TipoProtocolo;
+import com.handwash.model.HandwashingStep;
+import com.handwash.model.ProtocolType;
 
 import java.util.EnumMap;
 import java.util.Map;
@@ -144,12 +144,12 @@ public final class HandwashMetrics {
     private final Map<SendFailureCause, Counter> sendFailures = new EnumMap<>(SendFailureCause.class);
     private final Map<PersistenceFailureCause, Counter> failedAttemptPersistenceFailures =
         new EnumMap<>(PersistenceFailureCause.class);
-    private final Map<TipoProtocolo, Counter> ruleAccepted = new EnumMap<>(TipoProtocolo.class);
-    private final Map<TipoProtocolo, Counter> ruleRejected = new EnumMap<>(TipoProtocolo.class);
-    private final Map<TipoProtocolo, Map<PasoLavado, Counter>> ruleStepAccepted =
-        new EnumMap<>(TipoProtocolo.class);
-    private final Map<TipoProtocolo, Map<PasoLavado, Counter>> ruleStepRejected =
-        new EnumMap<>(TipoProtocolo.class);
+    private final Map<ProtocolType, Counter> ruleAccepted = new EnumMap<>(ProtocolType.class);
+    private final Map<ProtocolType, Counter> ruleRejected = new EnumMap<>(ProtocolType.class);
+    private final Map<ProtocolType, Map<HandwashingStep, Counter>> ruleStepAccepted =
+        new EnumMap<>(ProtocolType.class);
+    private final Map<ProtocolType, Map<HandwashingStep, Counter>> ruleStepRejected =
+        new EnumMap<>(ProtocolType.class);
 
     @Autowired
     public HandwashMetrics(MeterRegistry registry) {
@@ -190,15 +190,15 @@ public final class HandwashMetrics {
             failedAttemptPersistenceFailures.put(cause,
                 counter("handwash.failed-attempt.persistence.failures", "operation", cause.tag));
         }
-        for (TipoProtocolo protocol : TipoProtocolo.values()) {
+        for (ProtocolType protocol : ProtocolType.values()) {
             ruleAccepted.put(protocol, counter("handwash.detection.rule.decisions",
                 "protocol", protocol.name(), "result", "accepted"));
             ruleRejected.put(protocol, counter("handwash.detection.rule.decisions",
                 "protocol", protocol.name(), "result", "rejected"));
 
-            Map<PasoLavado, Counter> acceptedByStep = new EnumMap<>(PasoLavado.class);
-            Map<PasoLavado, Counter> rejectedByStep = new EnumMap<>(PasoLavado.class);
-            for (PasoLavado step : PasoLavado.values()) {
+            Map<HandwashingStep, Counter> acceptedByStep = new EnumMap<>(HandwashingStep.class);
+            Map<HandwashingStep, Counter> rejectedByStep = new EnumMap<>(HandwashingStep.class);
+            for (HandwashingStep step : HandwashingStep.values()) {
                 acceptedByStep.put(step, counter("handwash.detection.rule.step.decisions",
                     "protocol", protocol.name(), "step", step.name(), "result", "accepted"));
                 rejectedByStep.put(step, counter("handwash.detection.rule.step.decisions",
@@ -232,7 +232,7 @@ public final class HandwashMetrics {
         }
         outboundQueueRejected = null;
         coalescedStates = null;
-        for (TipoProtocolo protocol : TipoProtocolo.values()) {
+        for (ProtocolType protocol : ProtocolType.values()) {
             ruleAccepted.put(protocol, null);
             ruleRejected.put(protocol, null);
         }
@@ -320,16 +320,16 @@ public final class HandwashMetrics {
         }
     }
 
-    public void recordRuleDecision(TipoProtocolo protocol, boolean accepted) {
+    public void recordRuleDecision(ProtocolType protocol, boolean accepted) {
         if (registry == null || protocol == null) return;
         increment(accepted ? ruleAccepted.get(protocol) : ruleRejected.get(protocol));
     }
 
     /** Records the aggregate decision and its fixed-enum step breakdown. */
-    public void recordRuleDecision(TipoProtocolo protocol, PasoLavado step, boolean accepted) {
+    public void recordRuleDecision(ProtocolType protocol, HandwashingStep step, boolean accepted) {
         recordRuleDecision(protocol, accepted);
         if (registry == null || protocol == null || step == null) return;
-        Map<TipoProtocolo, Map<PasoLavado, Counter>> counters =
+        Map<ProtocolType, Map<HandwashingStep, Counter>> counters =
             accepted ? ruleStepAccepted : ruleStepRejected;
         increment(counters.get(protocol).get(step));
     }

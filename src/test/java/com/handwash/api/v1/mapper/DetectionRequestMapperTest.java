@@ -4,7 +4,7 @@ import com.handwash.api.v1.dto.DetectionRequest;
 import com.handwash.api.v1.dto.MovementEvidenceRequest;
 import com.handwash.api.v1.dto.SoapEvidenceRequest;
 import com.handwash.api.v1.dto.SoapEvidenceState;
-import com.handwash.model.EstadoEvidenciaJabon;
+import com.handwash.model.SoapEvidenceStatus;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
@@ -32,7 +32,7 @@ class DetectionRequestMapperTest {
         assertEquals(18L, event.getEvidenciaJabonSecuencia());
         assertEquals(2, event.getEvidenciaMovimiento().manosVisibles());
         assertNotSame(request.evidenciaMovimiento(), event.getEvidenciaMovimiento());
-        assertEquals(EstadoEvidenciaJabon.ESPUMA_VISIBLE,
+        assertEquals(SoapEvidenceStatus.ESPUMA_VISIBLE,
             event.getEvidenciaJabon().get("PALMA_IZQUIERDA").getEstado());
         assertEquals(0.94f, event.getEvidenciaJabon().get("PALMA_IZQUIERDA").getConfianza());
         assertNotSame(request.evidenciaJabon().get("PALMA_IZQUIERDA"),
@@ -73,7 +73,7 @@ class DetectionRequestMapperTest {
 
         var event = mapper.toDomain(request);
 
-        assertEquals(EstadoEvidenciaJabon.ESPUMA_VISIBLE,
+        assertEquals(SoapEvidenceStatus.ESPUMA_VISIBLE,
             event.getEvidenciaJabon().get("PALMA_IZQUIERDA").getEstado());
         assertNull(event.getEvidenciaJabon().get("PALMA_IZQUIERDA").getConfianza());
     }

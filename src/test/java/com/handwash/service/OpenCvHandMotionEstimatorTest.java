@@ -1,6 +1,6 @@
 package com.handwash.service;
 
-import com.handwash.model.EvidenciaPoseManos;
+import com.handwash.model.HandPoseEvidence;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -68,7 +68,7 @@ class OpenCvHandMotionEstimatorTest {
         assertTrue(estimator.observe("session", "epoch", 4,
             SECOND + 600_000_000L, initial).valid());
 
-        var malformed = new EvidenciaPoseManos(new Double[1][21][3], new Double[2][4],
+        var malformed = new HandPoseEvidence(new Double[1][21][3], new Double[2][4],
             WIDTH, HEIGHT);
         assertFalse(estimator.observe("session", "epoch", 5,
             SECOND + 800_000_000L, malformed).valid());
@@ -89,7 +89,7 @@ class OpenCvHandMotionEstimatorTest {
             SECOND + 1_051_000_000L, pose).valid());
     }
 
-    private static EvidenciaPoseManos pose(double translateX, double translateY,
+    private static HandPoseEvidence pose(double translateX, double translateY,
                                            double scale, double angle, boolean swap,
                                            double firstHandShiftY) {
         Double[][][] points = new Double[2][21][3];
@@ -119,10 +119,10 @@ class OpenCvHandMotionEstimatorTest {
                 Math.min(WIDTH, maxX + 4.0), Math.min(HEIGHT, maxY + 4.0)
             };
         }
-        return new EvidenciaPoseManos(points, boxes, WIDTH, HEIGHT);
+        return new HandPoseEvidence(points, boxes, WIDTH, HEIGHT);
     }
 
-    private static EvidenciaPoseManos pose(double translateX, double translateY,
+    private static HandPoseEvidence pose(double translateX, double translateY,
                                            double scale, double angle, boolean swap) {
         return pose(translateX, translateY, scale, angle, swap, 0.0);
     }

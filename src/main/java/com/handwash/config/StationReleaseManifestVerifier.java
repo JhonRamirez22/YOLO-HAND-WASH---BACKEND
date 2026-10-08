@@ -1,8 +1,8 @@
 package com.handwash.config;
 
-import com.handwash.intention.CadenaIntencionLavado;
-import com.handwash.model.AccionOms;
-import com.handwash.model.RegionJabon;
+import com.handwash.intention.HandwashingIntentChain;
+import com.handwash.model.OmsAction;
+import com.handwash.model.SoapRegion;
 import tools.jackson.core.JacksonException;
 import tools.jackson.core.StreamReadFeature;
 import tools.jackson.core.json.JsonFactory;
@@ -59,8 +59,8 @@ final class StationReleaseManifestVerifier {
     static void requireAuthorizedRelease(
         Path projectRoot, String publicKeyPathValue, Path runningJavaArtifact) {
         requireAuthorizedRelease(projectRoot, publicKeyPathValue, runningJavaArtifact,
-            CadenaIntencionLavado.DEFAULT_MOVEMENT_THRESHOLD,
-            CadenaIntencionLavado.DEFAULT_MOVEMENT_THRESHOLD);
+            HandwashingIntentChain.DEFAULT_MOVEMENT_THRESHOLD,
+            HandwashingIntentChain.DEFAULT_MOVEMENT_THRESHOLD);
     }
 
     static void requireAuthorizedRelease(Path projectRoot, String publicKeyPathValue,
@@ -375,9 +375,9 @@ final class StationReleaseManifestVerifier {
 
     private static List<String> canonicalModelClasses() {
         List<String> requiredClasses = new ArrayList<>();
-        AccionOms.SECUENCIA.stream().map(AccionOms::getClaseModelo).forEach(requiredClasses::add);
-        requiredClasses.add(AccionOms.CONTACTO_RIESGO.getClaseModelo());
-        for (RegionJabon region : RegionJabon.values()) {
+        OmsAction.SECUENCIA.stream().map(OmsAction::getClaseModelo).forEach(requiredClasses::add);
+        requiredClasses.add(OmsAction.CONTACTO_RIESGO.getClaseModelo());
+        for (SoapRegion region : SoapRegion.values()) {
             requiredClasses.add(region.claseEspumaVisible());
             requiredClasses.add(region.claseSinEspumaVisible());
         }
@@ -393,7 +393,7 @@ final class StationReleaseManifestVerifier {
             || !manifest.path("schemaVersion").canConvertToInt()
             || manifest.path("schemaVersion").intValue() != 1) return false;
 
-        List<String> expectedPhases = AccionOms.SECUENCIA.stream()
+        List<String> expectedPhases = OmsAction.SECUENCIA.stream()
             .map(Enum::name).toList();
         if (!matchesOrderedTextArray(who.path("requiredPhases"), expectedPhases)) return false;
 

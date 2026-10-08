@@ -1,7 +1,7 @@
 package com.handwash.config;
 
-import com.handwash.model.AccionOms;
-import com.handwash.model.RegionJabon;
+import com.handwash.model.OmsAction;
+import com.handwash.model.SoapRegion;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -589,14 +589,14 @@ class StationReleaseManifestVerifierTest {
             + "\"validatedAgainst\":{\"independentValidationEligible\":true}},"
             + "\"whoProcedure\":{\"status\":\"VALIDATED_FOR_HOSPITAL_PILOT\","
             + "\"approvalAllowed\":true,\"requiredPhases\":"
-            + jsonArray(AccionOms.SECUENCIA.stream().map(Enum::name).toList()) + "}}";
+            + jsonArray(OmsAction.SECUENCIA.stream().map(Enum::name).toList()) + "}}";
     }
 
     private List<String> requiredModelClasses() {
         List<String> classes = new ArrayList<>();
-        AccionOms.SECUENCIA.stream().map(AccionOms::getClaseModelo).forEach(classes::add);
-        classes.add(AccionOms.CONTACTO_RIESGO.getClaseModelo());
-        for (RegionJabon region : RegionJabon.values()) {
+        OmsAction.SECUENCIA.stream().map(OmsAction::getClaseModelo).forEach(classes::add);
+        classes.add(OmsAction.CONTACTO_RIESGO.getClaseModelo());
+        for (SoapRegion region : SoapRegion.values()) {
             classes.add(region.claseEspumaVisible());
             classes.add(region.claseSinEspumaVisible());
         }

@@ -3,11 +3,11 @@ package com.handwash.api.v1.mapper;
 import com.handwash.api.v1.dto.OmsActionResponse;
 import com.handwash.api.v1.dto.OmsProtocolResponse;
 import com.handwash.api.v1.dto.ProtocolResponse;
-import com.handwash.model.AccionOms;
-import com.handwash.model.PasoLavado;
-import com.handwash.model.TipoProtocolo;
-import com.handwash.strategy.ReglaValidacionStrategy;
-import com.handwash.strategy.ReglaValidacionStrategyFactory;
+import com.handwash.model.OmsAction;
+import com.handwash.model.HandwashingStep;
+import com.handwash.model.ProtocolType;
+import com.handwash.strategy.ValidationRuleStrategy;
+import com.handwash.strategy.ValidationRuleStrategyFactory;
 import org.springframework.stereotype.Component;
 
 import java.util.LinkedHashMap;
@@ -24,19 +24,19 @@ public final class ProtocolCatalogMapper {
     private static final String OMS_DURATION_NOTE =
         "La OMS indica 40–60 s para el procedimiento completo; los segundos por movimiento son reglas configuradas por el proyecto.";
 
-    private final ReglaValidacionStrategyFactory strategyFactory;
+    private final ValidationRuleStrategyFactory strategyFactory;
 
-    public ProtocolCatalogMapper(ReglaValidacionStrategyFactory strategyFactory) {
+    public ProtocolCatalogMapper(ValidationRuleStrategyFactory strategyFactory) {
         this.strategyFactory = strategyFactory;
     }
 
     public Map<String, ProtocolResponse> frictionProtocols() {
         Map<String, ProtocolResponse> responses = new LinkedHashMap<>();
-        for (TipoProtocolo protocol : TipoProtocolo.values()) {
-            ReglaValidacionStrategy strategy = strategyFactory.crear(protocol);
+        for (ProtocolType protocol : ProtocolType.values()) {
+            ValidationRuleStrategy strategy = strategyFactory.crear(protocol);
             Map<String, Long> stepTimes = new LinkedHashMap<>();
-            for (PasoLavado step : PasoLavado.values()) {
-                if (step != PasoLavado.FONDO) {
+            for (HandwashingStep step : HandwashingStep.values()) {
+                if (step != HandwashingStep.FONDO) {
                     stepTimes.put(step.name(), strategy.getTiempoRequeridoPaso(step));
                 }
             }
@@ -54,7 +54,7 @@ public final class ProtocolCatalogMapper {
     }
 
     public OmsProtocolResponse soapAndWaterReference() {
-        List<OmsActionResponse> actions = AccionOms.SECUENCIA.stream()
+        List<OmsActionResponse> actions = OmsAction.SECUENCIA.stream()
             .map(action -> new OmsActionResponse(action.getOrden(), action.getClaseModelo(),
                 action.getNombre(), action.getInstruccion(), action.getClaseModelo()))
             .toList();

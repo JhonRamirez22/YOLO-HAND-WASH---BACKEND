@@ -1,11 +1,11 @@
 package com.handwash.controller;
 
-import com.handwash.agent.Receptor;
+import com.handwash.agent.Receiver;
 import com.handwash.api.v1.dto.ApiErrorResponse;
 import com.handwash.api.v1.dto.EvaluationResponse;
 import com.handwash.api.v1.dto.InferenceResponse;
 import com.handwash.api.v1.mapper.SessionResponseMapper;
-import com.handwash.model.TipoProtocolo;
+import com.handwash.model.ProtocolType;
 import com.handwash.security.SessionTokenResolver;
 import com.handwash.service.ImagePayloadValidator;
 import com.handwash.service.InferenceAdmissionGate;
@@ -136,7 +136,7 @@ class InferenceControllerTest {
     @Test
     void existingSessionWithoutTokenIsRejectedBeforeInvokingTheModel() {
         Fixture fixture = new Fixture();
-        String id = fixture.manager.crearSesion(TipoProtocolo.DOMESTICO);
+        String id = fixture.manager.crearSesion(ProtocolType.DOMESTICO);
 
         ResponseEntity<?> response = fixture.controller.infer(IMAGE, id, null);
 
@@ -173,8 +173,8 @@ class InferenceControllerTest {
 
     @Test
     void diagnosticInferenceReportsMissingStrictV2EpochInsteadOfReturningModelSuccess() {
-        SessionManager manager = new SessionManager(new Receptor());
-        String id = manager.crearSesion(TipoProtocolo.DOMESTICO, true);
+        SessionManager manager = new SessionManager(new Receiver());
+        String id = manager.crearSesion(ProtocolType.DOMESTICO, true);
         String token = manager.getOwnerToken(id);
         ImagePayloadValidator validator = new ImagePayloadValidator(MAX_IMAGE_BYTES, MAX_IMAGE_PIXELS);
         StubInferenceService onnx = new StubInferenceService(validator, new InferenceAdmissionGate(1));
@@ -194,8 +194,8 @@ class InferenceControllerTest {
             new ImagePayloadValidator(MAX_IMAGE_BYTES, MAX_IMAGE_PIXELS);
         final StubInferenceService onnx = new StubInferenceService(
             imageValidator, new InferenceAdmissionGate(1));
-        final SessionManager manager = new SessionManager(new Receptor());
-        final String id = manager.crearSesion(TipoProtocolo.DOMESTICO);
+        final SessionManager manager = new SessionManager(new Receiver());
+        final String id = manager.crearSesion(ProtocolType.DOMESTICO);
         final String token = manager.getOwnerToken(id);
         final String deviceToken = manager.emitirTokenDispositivo(id).value();
         final InferenceController controller = new InferenceController(

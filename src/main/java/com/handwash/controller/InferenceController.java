@@ -1,11 +1,11 @@
 package com.handwash.controller;
 
-import com.handwash.model.DeteccionEvento;
-import com.handwash.model.EstadoSesion;
-import com.handwash.model.SesionLavado;
+import com.handwash.model.DetectionEvent;
+import com.handwash.model.HandwashingSessionState;
+import com.handwash.model.HandwashingSession;
 import com.handwash.service.InferenceService;
 import com.handwash.service.SessionManager;
-import com.handwash.service.ModoDeteccionIncompatibleException;
+import com.handwash.service.IncompatibleDetectionModeException;
 import com.handwash.service.ImagePayloadValidator;
 import com.handwash.service.ImagePayloadTooLargeException;
 import com.handwash.security.SessionTokenResolver;
@@ -58,15 +58,15 @@ public class InferenceController {
         if (sessionId == null || sessionId.isBlank()) {
             return ResponseEntity.badRequest().body(ApiErrorResponse.of("SESSION_ID_REQUIRED"));
         }
-        SesionLavado sesion = sessionManager.getSesion(sessionId);
+        HandwashingSession sesion = sessionManager.getSesion(sessionId);
         if (sesion == null) return ResponseEntity.status(HttpStatus.NOT_FOUND)
             .body(ApiErrorResponse.of("SESION_NO_ENCONTRADA"));
         if (!sessionManager.tieneAcceso(sessionId, accessToken, false)) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .body(ApiErrorResponse.of("ACCESO_NO_AUTORIZADO"));
         }
-        if (sesion.getEstadoSesion() == EstadoSesion.COMPLETADA
-            || sesion.getEstadoSesion() == EstadoSesion.EXPIRADA) {
+        if (sesion.getEstadoSesion() == HandwashingSessionState.COMPLETADA
+            || sesion.getEstadoSesion() == HandwashingSessionState.EXPIRADA) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(ApiErrorResponse.of("SESION_TERMINADA"));
         }
@@ -103,7 +103,7 @@ public class InferenceController {
             if (claseBackend instanceof String clase && confianza instanceof Number score) {
                 try {
                     SessionManager.DetectionResult decision = sessionManager.procesarDeteccionHttp(
-                        new DeteccionEvento(sessionId, clase, score.floatValue(), Instant.now().toString()),
+                        new DetectionEvent(sessionId, clase, score.floatValue(), Instant.now().toString()),
                         accessToken);
                     ResponseEntity<?> rejected = rejectionResponse(decision);
                     if (rejected != null) return rejected;
@@ -114,7 +114,7 @@ public class InferenceController {
                     result.put("resultadoIngresoBackend",
                         decision.outcome() == SessionManager.DetectionOutcome.ACCEPTED
                             ? "PROCESADA" : "FILTRADA");
-                    SesionLavado sesionActual = decision.session();
+                    HandwashingSession sesionActual = decision.session();
                     if (sesionActual != null) {
                         synchronized (sesionActual) {
                             if (sessionManager.getSesion(sessionId) != sesionActual) {
@@ -125,7 +125,7 @@ public class InferenceController {
                                 sesionActual.getEstadoActualResponse());
                         }
                     }
-                } catch (ModoDeteccionIncompatibleException unavailable) {
+                } catch (IncompatibleDetectionModeException unavailable) {
                     return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiErrorResponse.withMessage(
                         "MODO_DETECCION_NO_DISPONIBLE", unavailable.getMessage()));
                 }

@@ -1,10 +1,10 @@
 package com.handwash.service;
 
-import com.handwash.model.DeteccionEvento;
-import com.handwash.model.EvidenciaJabon;
-import com.handwash.model.EstadoEvidenciaJabon;
-import com.handwash.model.AccionOms;
-import com.handwash.model.PasoLavado;
+import com.handwash.model.DetectionEvent;
+import com.handwash.model.SoapEvidence;
+import com.handwash.model.SoapEvidenceStatus;
+import com.handwash.model.OmsAction;
+import com.handwash.model.HandwashingStep;
 import com.handwash.service.HandwashMetrics.ProducerRejectionReason;
 import org.junit.jupiter.api.Test;
 
@@ -49,37 +49,37 @@ class ProducerProtocolRegistryTest {
         registry.initializeSession(SESSION, true);
         var registration = registry.registerEpoch(SESSION);
 
-        DeteccionEvento legacyAlias = detection(registration.producerEpoch(), 17L, null);
+        DetectionEvent legacyAlias = detection(registration.producerEpoch(), 17L, null);
         legacyAlias.setClaseDetectada("Paso1_Palmas");
         assertEquals(ProducerRejectionReason.NON_CANONICAL_CLASS,
             registry.assessAndReserve(SESSION, legacyAlias).rejectionReason());
 
-        DeteccionEvento semanticAlias = detection(registration.producerEpoch(), 17L, null);
+        DetectionEvent semanticAlias = detection(registration.producerEpoch(), 17L, null);
         semanticAlias.setClaseDetectada("Paso3_PalmaDorsoDedos");
         assertEquals(ProducerRejectionReason.NON_CANONICAL_CLASS,
             registry.assessAndReserve(SESSION, semanticAlias).rejectionReason());
 
-        DeteccionEvento corrected = detection(registration.producerEpoch(), 17L, null);
+        DetectionEvent corrected = detection(registration.producerEpoch(), 17L, null);
         assertTrue(registry.assessAndReserve(SESSION, corrected).acceptedEnvelope(),
             "the producer may retry the unconsumed frame using its exact canonical class");
 
         long sequence = 18L;
-        for (PasoLavado step : PasoLavado.values()) {
-            if (step == PasoLavado.FONDO) continue;
-            DeteccionEvento event = detection(registration.producerEpoch(), sequence++, null);
+        for (HandwashingStep step : HandwashingStep.values()) {
+            if (step == HandwashingStep.FONDO) continue;
+            DetectionEvent event = detection(registration.producerEpoch(), sequence++, null);
             event.setClaseDetectada(step.name());
             assertTrue(registry.assessAndReserve(SESSION, event).acceptedEnvelope(), step.name());
         }
-        for (AccionOms action : AccionOms.values()) {
+        for (OmsAction action : OmsAction.values()) {
             if (action.esSinEvidencia()) continue;
-            DeteccionEvento event = detection(registration.producerEpoch(), sequence++, null);
+            DetectionEvent event = detection(registration.producerEpoch(), sequence++, null);
             event.setClaseDetectada(action.getClaseModelo());
             assertTrue(registry.assessAndReserve(SESSION, event).acceptedEnvelope(),
                 action.getClaseModelo());
         }
 
         for (String controlOnlyLabel : new String[] {"FONDO", "OMS_SIN_EVIDENCIA"}) {
-            DeteccionEvento controlOnly = detection(registration.producerEpoch(), sequence, null);
+            DetectionEvent controlOnly = detection(registration.producerEpoch(), sequence, null);
             controlOnly.setClaseDetectada(controlOnlyLabel);
             assertEquals(ProducerRejectionReason.NON_CANONICAL_CLASS,
                 registry.assessAndReserve(SESSION, controlOnly).rejectionReason());
@@ -99,10 +99,10 @@ class ProducerProtocolRegistryTest {
                 detection(registration.producerEpoch(), 500L, null)).rejectionReason(),
             "a domain-invalid observation cannot be repaired and replayed as the same camera frame");
 
-        DeteccionEvento invalidControl = control(registration.producerEpoch(), 20L, 900L);
+        DetectionEvent invalidControl = control(registration.producerEpoch(), 20L, 900L);
         assertTrue(registry.assessAndReserve(SESSION, invalidControl).acceptedEnvelope());
 
-        DeteccionEvento validFrame = detection(registration.producerEpoch(), 901L, null);
+        DetectionEvent validFrame = detection(registration.producerEpoch(), 901L, null);
         assertTrue(registry.assessAndReserve(SESSION, validFrame).acceptedEnvelope(),
             "control watermarks and frame watermarks are independent while preserving ordering");
         assertEquals(ProducerRejectionReason.CONTROL_SEQUENCE_DUPLICATE,
@@ -117,9 +117,9 @@ class ProducerProtocolRegistryTest {
         registry.initializeSession(SESSION, true);
         var registration = registry.registerEpoch(SESSION);
 
-        DeteccionEvento staleSoap = detection(registration.producerEpoch(), 41L, null);
+        DetectionEvent staleSoap = detection(registration.producerEpoch(), 41L, null);
         staleSoap.setEvidenciaJabon(Map.of("PALMA_IZQUIERDA",
-            new EvidenciaJabon(EstadoEvidenciaJabon.ESPUMA_VISIBLE, 0.95f)));
+            new SoapEvidence(SoapEvidenceStatus.ESPUMA_VISIBLE, 0.95f)));
         staleSoap.setEvidenciaJabonSecuencia(40L);
         assertEquals(ProducerRejectionReason.SOAP_EVIDENCE_SEQUENCE_MISMATCH,
             registry.assessAndReserve(SESSION, staleSoap).rejectionReason());
@@ -135,13 +135,13 @@ class ProducerProtocolRegistryTest {
         registry.initializeSession(SESSION, true);
         var registration = registry.registerEpoch(SESSION);
 
-        DeteccionEvento missing = detection(registration.producerEpoch(), 3L, null);
+        DetectionEvent missing = detection(registration.producerEpoch(), 3L, null);
         missing.setEvidenciaJabon(Map.of("PALMA_IZQUIERDA",
-            new EvidenciaJabon(EstadoEvidenciaJabon.ESPUMA_VISIBLE, 0.95f)));
+            new SoapEvidence(SoapEvidenceStatus.ESPUMA_VISIBLE, 0.95f)));
         assertEquals(ProducerRejectionReason.SOAP_EVIDENCE_SEQUENCE_REQUIRED,
             registry.assessAndReserve(SESSION, missing).rejectionReason());
 
-        DeteccionEvento orphan = detection(registration.producerEpoch(), 4L, null);
+        DetectionEvent orphan = detection(registration.producerEpoch(), 4L, null);
         orphan.setEvidenciaJabonSecuencia(4L);
         assertEquals(ProducerRejectionReason.SOAP_EVIDENCE_SEQUENCE_WITHOUT_EVIDENCE,
             registry.assessAndReserve(SESSION, orphan).rejectionReason());
@@ -174,13 +174,13 @@ class ProducerProtocolRegistryTest {
         registry.initializeSession(SESSION, true);
         var registration = registry.registerEpoch(SESSION);
 
-        DeteccionEvento control = new DeteccionEvento(SESSION, "FONDO", 1f, "now");
+        DetectionEvent control = new DetectionEvent(SESSION, "FONDO", 1f, "now");
         control.setProducerEpoch(registration.producerEpoch());
         control.setEventType("CONTROL");
         control.setControlSequence(1L);
         control.setFrameWatermark(12L);
         control.setEvidenciaJabon(Map.of("PALMA_IZQUIERDA",
-            new EvidenciaJabon(EstadoEvidenciaJabon.ESPUMA_VISIBLE, 0.95f)));
+            new SoapEvidence(SoapEvidenceStatus.ESPUMA_VISIBLE, 0.95f)));
         control.setEvidenciaJabonSecuencia(12L);
         assertEquals(ProducerRejectionReason.CONTROL_CARRIES_FRAME_EVIDENCE,
             registry.assessAndReserve(SESSION, control).rejectionReason());
@@ -193,7 +193,7 @@ class ProducerProtocolRegistryTest {
         assertEquals(ProducerRejectionReason.FRAME_SEQUENCE_DUPLICATE,
             staleFrame.rejectionReason());
 
-        DeteccionEvento staleControl = new DeteccionEvento(SESSION, "OMS_SIN_EVIDENCIA", 1f, "now");
+        DetectionEvent staleControl = new DetectionEvent(SESSION, "OMS_SIN_EVIDENCIA", 1f, "now");
         staleControl.setProducerEpoch(registration.producerEpoch());
         staleControl.setEventType("CONTROL");
         staleControl.setControlSequence(2L);
@@ -201,7 +201,7 @@ class ProducerProtocolRegistryTest {
         assertEquals(ProducerRejectionReason.FRAME_WATERMARK_OUT_OF_ORDER,
             registry.assessAndReserve(SESSION, staleControl).rejectionReason());
 
-        DeteccionEvento duplicateControl = new DeteccionEvento(SESSION, "FONDO", 1f, "now");
+        DetectionEvent duplicateControl = new DetectionEvent(SESSION, "FONDO", 1f, "now");
         duplicateControl.setProducerEpoch(registration.producerEpoch());
         duplicateControl.setEventType("CONTROL");
         duplicateControl.setControlSequence(1L);
@@ -226,13 +226,13 @@ class ProducerProtocolRegistryTest {
         assertTrue(registry.assessAndReserve(SESSION, presence(epoch, 2L, 11L, 2))
             .acceptedEnvelope(), "a rejected presence frame does not consume its control sequence");
 
-        DeteccionEvento presenceWithMovement = presence(epoch, 3L, 12L, 2);
+        DetectionEvent presenceWithMovement = presence(epoch, 3L, 12L, 2);
         presenceWithMovement.setEvidenciaMovimiento(
-            new com.handwash.model.EvidenciaMovimiento(12L, 2, 0.1, true, 1L));
+            new com.handwash.model.MovementEvidence(12L, 2, 0.1, true, 1L));
         assertEquals(ProducerRejectionReason.PRESENCE_CARRIES_DOMAIN_EVIDENCE,
             registry.assessAndReserve(SESSION, presenceWithMovement).rejectionReason());
 
-        DeteccionEvento invalidHands = presence(epoch, 3L, 12L, 3);
+        DetectionEvent invalidHands = presence(epoch, 3L, 12L, 3);
         assertEquals(ProducerRejectionReason.PRESENCE_HAND_COUNT_INVALID,
             registry.assessAndReserve(SESSION, invalidHands).rejectionReason());
         assertTrue(registry.assessAndReserve(SESSION, presence(epoch, 3L, 12L, 1))
@@ -282,7 +282,7 @@ class ProducerProtocolRegistryTest {
         ProducerProtocolRegistry registry = new ProducerProtocolRegistry();
         registry.initializeSession(SESSION, true);
         String epoch = registry.registerEpoch(SESSION).producerEpoch();
-        DeteccionEvento delayed = presence(epoch, 0L, 1L, 2);
+        DetectionEvent delayed = presence(epoch, 0L, 1L, 2);
         delayed.setCaptureAgeMs(60_000L);
 
         assertTrue(registry.assessAndReserve(SESSION, delayed).acceptedEnvelope(),
@@ -294,7 +294,7 @@ class ProducerProtocolRegistryTest {
         ProducerProtocolRegistry registry = new ProducerProtocolRegistry();
         registry.initializeSession(SESSION, false);
 
-        DeteccionEvento legacy = new DeteccionEvento(SESSION, "Paso1_Palmas", .9f, "now");
+        DetectionEvent legacy = new DetectionEvent(SESSION, "Paso1_Palmas", .9f, "now");
         assertNull(registry.assessAndReserve(SESSION, legacy).rejectionReason());
         assertEquals(ProducerRejectionReason.VERSIONED_FIELDS_ON_LEGACY_SESSION,
             registry.assessAndReserve(SESSION, detection("epoch", 1L, null)).rejectionReason());
@@ -304,8 +304,8 @@ class ProducerProtocolRegistryTest {
             registry.assessAndReserve(SESSION, detection("epoch", 1L, null)).rejectionReason());
     }
 
-    private DeteccionEvento detection(String epoch, long sequence, Long ageMs) {
-        DeteccionEvento event = new DeteccionEvento(SESSION, "PASO_1_PALMAS", .95f, "now");
+    private DetectionEvent detection(String epoch, long sequence, Long ageMs) {
+        DetectionEvent event = new DetectionEvent(SESSION, "PASO_1_PALMAS", .95f, "now");
         event.setProducerEpoch(epoch);
         event.setEventType("DETECTION");
         event.setFrameSequence(sequence);
@@ -313,8 +313,8 @@ class ProducerProtocolRegistryTest {
         return event;
     }
 
-    private DeteccionEvento control(String epoch, long sequence, long watermark) {
-        DeteccionEvento event = new DeteccionEvento(SESSION, "FONDO", 1f, "now");
+    private DetectionEvent control(String epoch, long sequence, long watermark) {
+        DetectionEvent event = new DetectionEvent(SESSION, "FONDO", 1f, "now");
         event.setProducerEpoch(epoch);
         event.setEventType("CONTROL");
         event.setControlSequence(sequence);
@@ -322,9 +322,9 @@ class ProducerProtocolRegistryTest {
         return event;
     }
 
-    private DeteccionEvento presence(String epoch, long controlSequence,
+    private DetectionEvent presence(String epoch, long controlSequence,
                                     long frameWatermark, Integer handsVisible) {
-        DeteccionEvento event = new DeteccionEvento(SESSION, "PRESENCIA_MANOS", 1f, "now");
+        DetectionEvent event = new DetectionEvent(SESSION, "PRESENCIA_MANOS", 1f, "now");
         event.setProducerEpoch(epoch);
         event.setEventType("PRESENCE");
         event.setControlSequence(controlSequence);

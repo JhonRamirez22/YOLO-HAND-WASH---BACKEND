@@ -2,7 +2,7 @@ package com.handwash.repository;
 
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
-import com.handwash.model.IntentoLavadoResumen;
+import com.handwash.model.HandwashingAttemptSummary;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
@@ -26,7 +26,7 @@ public class FailedAttemptRepository implements FailedAttemptStore {
     }
 
     /** Idempotent by session and attempt number, so retries cannot duplicate a failure. */
-    public void insertIfAbsent(String sessionId, IntentoLavadoResumen attempt) {
+    public void insertIfAbsent(String sessionId, HandwashingAttemptSummary attempt) {
         String payload;
         try {
             payload = objectMapper.writeValueAsString(attempt);
@@ -62,7 +62,7 @@ public class FailedAttemptRepository implements FailedAttemptStore {
             """, sessionId, sessionId, MAX_ATTEMPTS_PER_SESSION);
     }
 
-    public List<IntentoLavadoResumen> findBySession(String sessionId) {
+    public List<HandwashingAttemptSummary> findBySession(String sessionId) {
         return jdbcTemplate.query("""
                 SELECT payload_json
                 FROM failed_attempts
@@ -71,7 +71,7 @@ public class FailedAttemptRepository implements FailedAttemptStore {
                 """,
             (resultSet, rowNumber) -> {
                 try {
-                    return objectMapper.readValue(resultSet.getString("payload_json"), IntentoLavadoResumen.class);
+                    return objectMapper.readValue(resultSet.getString("payload_json"), HandwashingAttemptSummary.class);
                 } catch (JacksonException error) {
                     throw new IllegalStateException("Resumen de intento almacenado con JSON inválido", error);
                 }

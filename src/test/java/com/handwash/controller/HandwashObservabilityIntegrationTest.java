@@ -2,8 +2,8 @@ package com.handwash.controller;
 
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
-import com.handwash.agent.Notificador;
-import com.handwash.model.TipoProtocolo;
+import com.handwash.agent.Notifier;
+import com.handwash.model.ProtocolType;
 import com.handwash.service.SessionManager;
 import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -42,13 +42,13 @@ class HandwashObservabilityIntegrationTest {
     @Autowired TestRestTemplate http;
     @Autowired ObjectMapper mapper;
     @Autowired SessionManager sessionManager;
-    @Autowired Notificador notifier;
+    @Autowired Notifier notifier;
     @Autowired MeterRegistry meterRegistry;
     @LocalServerPort int port;
 
     @Test
     void expirationQueuesOneTerminalPairImmediatelyAndReconnectReplaysIt() throws Exception {
-        String id = sessionManager.crearSesion(TipoProtocolo.DOMESTICO);
+        String id = sessionManager.crearSesion(ProtocolType.DOMESTICO);
         String token = sessionManager.getOwnerToken(id);
         RecordingListener firstListener = new RecordingListener();
         WebSocket firstSocket = connect(id, token, firstListener);

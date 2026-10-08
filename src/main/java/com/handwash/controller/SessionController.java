@@ -1,12 +1,12 @@
 package com.handwash.controller;
 
-import com.handwash.model.SesionLavado;
-import com.handwash.model.EstadoSesion;
-import com.handwash.model.TipoProtocolo;
+import com.handwash.model.HandwashingSession;
+import com.handwash.model.HandwashingSessionState;
+import com.handwash.model.ProtocolType;
 import com.handwash.service.SessionManager;
 import com.handwash.service.SessionCapacityException;
-import com.handwash.agent.Notificador;
-import com.handwash.strategy.ReglaValidacionStrategy;
+import com.handwash.agent.Notifier;
+import com.handwash.strategy.ValidationRuleStrategy;
 import com.handwash.service.RequestRateLimiter;
 import com.handwash.repository.FailedAttemptStore;
 import com.handwash.api.v1.dto.ActiveSessionResponse;
@@ -40,7 +40,7 @@ public class SessionController {
     private final SessionManager sessionManager;
     private final ProtocolCatalogMapper protocolCatalogMapper;
     private final SessionResponseMapper sessionResponseMapper;
-    private final Notificador notificador;
+    private final Notifier notificador;
     private final RequestRateLimiter rateLimiter;
     private final FailedAttemptStore failedAttemptRepository;
     private final SessionAuthenticationService authenticationService;
@@ -51,7 +51,7 @@ public class SessionController {
     public SessionController(SessionManager sessionManager,
                              ProtocolCatalogMapper protocolCatalogMapper,
                              SessionResponseMapper sessionResponseMapper,
-                             Notificador notificador,
+                             Notifier notificador,
                              RequestRateLimiter rateLimiter,
                              FailedAttemptStore failedAttemptRepository,
                              SessionAuthenticationService authenticationService,
@@ -74,14 +74,14 @@ public class SessionController {
         }
         try {
             String protocoloStr = request == null ? null : request.protocolo();
-            TipoProtocolo protocolo = TipoProtocolo.fromRequestValue(protocoloStr);
+            ProtocolType protocolo = ProtocolType.fromRequestValue(protocoloStr);
             int producerProtocolVersion = producerProtocolVersion(
                 request == null ? null : request.producerProtocolVersion());
             if (producerV2Required && producerProtocolVersion != 2) {
                 return ResponseEntity.status(409).body(ApiErrorResponse.producerVersionRequired());
             }
             String sessionId = sessionManager.crearSesion(protocolo, producerProtocolVersion == 2);
-            ReglaValidacionStrategy strategy = sessionManager.getSesion(sessionId).getEstrategia();
+            ValidationRuleStrategy strategy = sessionManager.getSesion(sessionId).getEstrategia();
             return ResponseEntity.ok(new SessionCreatedResponse(
                 sessionId,
                 protocolo.value(),
@@ -102,15 +102,15 @@ public class SessionController {
 
     @GetMapping("/session/active")
     public ResponseEntity<?> obtenerSesionActiva() {
-        List<SesionLavado> activas = sessionManager.getSesionesActivas();
+        List<HandwashingSession> activas = sessionManager.getSesionesActivas();
         if (activas.isEmpty()) return ResponseEntity.noContent().build();
         if (activas.size() > 1) return ResponseEntity.status(409).body(ApiErrorResponse.withMessage(
             "SESIONES_ACTIVAS_AMBIGUAS", "Hay varias sesiones activas; usa el código de vinculación"));
-        SesionLavado sesion = activas.get(0);
+        HandwashingSession sesion = activas.get(0);
         synchronized (sesion) {
             if (sessionManager.getSesion(sesion.getSessionId()) != sesion
-                || sesion.getEstadoSesion() == EstadoSesion.COMPLETADA
-                || sesion.getEstadoSesion() == EstadoSesion.EXPIRADA) {
+                || sesion.getEstadoSesion() == HandwashingSessionState.COMPLETADA
+                || sesion.getEstadoSesion() == HandwashingSessionState.EXPIRADA) {
                 return ResponseEntity.noContent().build();
             }
             return ResponseEntity.ok(new ActiveSessionResponse(
@@ -195,7 +195,7 @@ public class SessionController {
         @RequestHeader(value = "Authorization", required = false) String authorization,
         @RequestHeader(value = "X-Session-Token", required = false) String legacyToken) {
         String accessToken = tokenResolver.resolve(authorization, legacyToken);
-        SesionLavado sesion = sessionManager.getSesion(sessionId);
+        HandwashingSession sesion = sessionManager.getSesion(sessionId);
         if (sesion == null) {
             return ResponseEntity.notFound().build();
         }

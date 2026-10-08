@@ -1,6 +1,6 @@
 package com.handwash.config;
 
-import com.handwash.intention.CadenaIntencionLavado;
+import com.handwash.intention.HandwashingIntentChain;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.beans.factory.config.BeanFactoryPostProcessor;
@@ -128,10 +128,10 @@ public final class StationProfileSafetyGuard implements BeanFactoryPostProcessor
                 projectRoot, publicKeyPath, runningArtifact,
                 configuredEnvironment.getProperty(
                     "handwash.intention.start-minimum-normalized-movement", Double.class,
-                    CadenaIntencionLavado.DEFAULT_MOVEMENT_THRESHOLD),
+                    HandwashingIntentChain.DEFAULT_MOVEMENT_THRESHOLD),
                 configuredEnvironment.getProperty(
                     "handwash.intention.step-minimum-normalized-movement", Double.class,
-                    CadenaIntencionLavado.DEFAULT_MOVEMENT_THRESHOLD));
+                    HandwashingIntentChain.DEFAULT_MOVEMENT_THRESHOLD));
             validateAuthorizedHospitalConfiguration(configuredEnvironment);
             secureRuntimeDirectory(projectRoot);
         } else if (demoStation) {
@@ -333,19 +333,19 @@ public final class StationProfileSafetyGuard implements BeanFactoryPostProcessor
     private static void validateMovementThresholdConfiguration(Environment environment) {
         double startThreshold = environment.getProperty(
             "handwash.intention.start-minimum-normalized-movement", Double.class,
-            CadenaIntencionLavado.DEFAULT_MOVEMENT_THRESHOLD);
+            HandwashingIntentChain.DEFAULT_MOVEMENT_THRESHOLD);
         double stepThreshold = environment.getProperty(
             "handwash.intention.step-minimum-normalized-movement", Double.class,
-            CadenaIntencionLavado.DEFAULT_MOVEMENT_THRESHOLD);
+            HandwashingIntentChain.DEFAULT_MOVEMENT_THRESHOLD);
         if (!validMovementThreshold(startThreshold) || !validMovementThreshold(stepThreshold)) {
             throw unsafe("los umbrales normalizados de movimiento deben ser finitos, mayores que 0 y <= 1.");
         }
         boolean demoStation = java.util.Arrays.stream(environment.getActiveProfiles())
             .anyMatch("station-demo"::equals);
         if (demoStation && (Double.compare(startThreshold,
-                CadenaIntencionLavado.DEFAULT_MOVEMENT_THRESHOLD) != 0
+                HandwashingIntentChain.DEFAULT_MOVEMENT_THRESHOLD) != 0
             || Double.compare(stepThreshold,
-                CadenaIntencionLavado.DEFAULT_MOVEMENT_THRESHOLD) != 0)) {
+                HandwashingIntentChain.DEFAULT_MOVEMENT_THRESHOLD) != 0)) {
             throw unsafe("station-demo debe conservar los umbrales no calibrados predeterminados.");
         }
     }

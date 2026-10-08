@@ -1,9 +1,9 @@
 package com.handwash.repository;
 
 import tools.jackson.databind.ObjectMapper;
-import com.handwash.model.Infraccion;
-import com.handwash.model.IntentoLavadoResumen;
-import com.handwash.model.TipoInfraccion;
+import com.handwash.model.Violation;
+import com.handwash.model.HandwashingAttemptSummary;
+import com.handwash.model.ViolationType;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -40,11 +40,11 @@ class FailedAttemptRepositoryTest {
 
     @Test
     void roundTripsOnlyTheFailedAttemptSummary() {
-        IntentoLavadoResumen attempt = sampleAttempt(1);
+        HandwashingAttemptSummary attempt = sampleAttempt(1);
 
         repository.insertIfAbsent("session-a", attempt);
 
-        List<IntentoLavadoResumen> stored = repository.findBySession("session-a");
+        List<HandwashingAttemptSummary> stored = repository.findBySession("session-a");
         assertEquals(1, stored.size());
         assertEquals(attempt.numero(), stored.get(0).numero());
         assertEquals(attempt.motivoReinicio(), stored.get(0).motivoReinicio());
@@ -55,12 +55,12 @@ class FailedAttemptRepositoryTest {
 
     @Test
     void duplicateAttemptInsertIsIdempotent() {
-        IntentoLavadoResumen attempt = sampleAttempt(3);
+        HandwashingAttemptSummary attempt = sampleAttempt(3);
 
         repository.insertIfAbsent("session-a", attempt);
         repository.insertIfAbsent("session-a", attempt);
 
-        List<IntentoLavadoResumen> stored = repository.findBySession("session-a");
+        List<HandwashingAttemptSummary> stored = repository.findBySession("session-a");
         assertEquals(1, stored.size());
         assertEquals(attempt.numero(), stored.get(0).numero());
     }
@@ -115,16 +115,16 @@ class FailedAttemptRepositoryTest {
             repository.insertIfAbsent("session-a", sampleAttempt(number));
         }
 
-        List<IntentoLavadoResumen> attempts = repository.findBySession("session-a");
+        List<HandwashingAttemptSummary> attempts = repository.findBySession("session-a");
         assertEquals(100, attempts.size());
         assertEquals(2, attempts.get(0).numero());
         assertEquals(101, attempts.get(99).numero());
     }
 
-    private IntentoLavadoResumen sampleAttempt(int number) {
-        Infraccion infraction = new Infraccion(
-            TipoInfraccion.PASO_OMITIDO, "Paso omitido", "PASO_3_INTERDIGITALES", "2026-09-25T12:00:00Z");
-        return new IntentoLavadoResumen(
+    private HandwashingAttemptSummary sampleAttempt(int number) {
+        Violation infraction = new Violation(
+            ViolationType.PASO_OMITIDO, "Paso omitido", "PASO_3_INTERDIGITALES", "2026-09-25T12:00:00Z");
+        return new HandwashingAttemptSummary(
             number,
             "REINICIADO",
             "PASO_FUERA_DE_SECUENCIA",

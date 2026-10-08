@@ -2,7 +2,7 @@ package com.handwash.controller;
 
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
-import com.handwash.agent.Receptor;
+import com.handwash.agent.Receiver;
 import com.handwash.api.v1.dto.ActiveSessionResponse;
 import com.handwash.api.v1.dto.ApiErrorResponse;
 import com.handwash.api.v1.dto.SessionDetailsResponse;
@@ -10,12 +10,12 @@ import com.handwash.api.v1.dto.SessionCreateRequest;
 import com.handwash.api.v1.dto.SessionPairRequest;
 import com.handwash.api.v1.mapper.ProtocolCatalogMapper;
 import com.handwash.api.v1.mapper.SessionResponseMapper;
-import com.handwash.model.TipoProtocolo;
+import com.handwash.model.ProtocolType;
 import com.handwash.security.SessionTokenResolver;
 import com.handwash.service.SessionManager;
 import com.handwash.service.RequestRateLimiter;
 import com.handwash.security.SessionAuthenticationService;
-import com.handwash.strategy.ReglaValidacionStrategyFactory;
+import com.handwash.strategy.ValidationRuleStrategyFactory;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.junit.jupiter.api.Test;
@@ -33,8 +33,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class SessionControllerTest {
     @Test
     void activeSessionReturnsVersionedDtoWithTheExistingJsonContract() {
-        SessionManager sessionManager = new SessionManager(new Receptor());
-        String sessionId = sessionManager.crearSesion(TipoProtocolo.DOMESTICO);
+        SessionManager sessionManager = new SessionManager(new Receiver());
+        String sessionId = sessionManager.crearSesion(ProtocolType.DOMESTICO);
         // This focused path uses only SessionManager; other controller collaborators are not invoked.
         SessionController controller = new SessionController(
             sessionManager, null, null, null, null, null, null, new SessionTokenResolver());
@@ -62,7 +62,7 @@ class SessionControllerTest {
     void sessionDetailsAuthenticateAndBuildOneSnapshotUnderTheSessionLock() {
         LockCheckingSessionManager manager = new LockCheckingSessionManager();
         SessionController controller = new SessionController(
-            manager, new ProtocolCatalogMapper(new ReglaValidacionStrategyFactory()),
+            manager, new ProtocolCatalogMapper(new ValidationRuleStrategyFactory()),
             new SessionResponseMapper(), null, null, null, null, new SessionTokenResolver());
 
         ResponseEntity<?> response = controller.obtenerSesion(manager.sessionId, null, "test-token");
@@ -107,7 +107,7 @@ class SessionControllerTest {
 
     @Test
     void stationRejectsSessionCreationWithoutV2BeforeCreatingLegacySession() {
-        SessionManager manager = new SessionManager(new Receptor());
+        SessionManager manager = new SessionManager(new Receiver());
         SessionController controller = controller(manager);
         ReflectionTestUtils.setField(controller, "producerV2Required", true);
 
@@ -123,8 +123,8 @@ class SessionControllerTest {
 
     @Test
     void stationRejectsLegacyPairingEvenForAnExistingLegacySession() {
-        SessionManager manager = new SessionManager(new Receptor());
-        String sessionId = manager.crearSesion(TipoProtocolo.DOMESTICO);
+        SessionManager manager = new SessionManager(new Receiver());
+        String sessionId = manager.crearSesion(ProtocolType.DOMESTICO);
         String existingDeviceToken = manager.getDeviceToken(sessionId);
         SessionController controller = controller(manager);
         ReflectionTestUtils.setField(controller, "producerV2Required", true);
@@ -158,8 +158,8 @@ class SessionControllerTest {
         private final String sessionId;
 
         private FailingPersistenceSessionManager() {
-            super(new Receptor());
-            sessionId = crearSesion(TipoProtocolo.DOMESTICO);
+            super(new Receiver());
+            sessionId = crearSesion(ProtocolType.DOMESTICO);
         }
 
         @Override
@@ -179,8 +179,8 @@ class SessionControllerTest {
         private boolean ownerAuthorizationWasLocked;
 
         private LockCheckingSessionManager() {
-            super(new Receptor());
-            sessionId = crearSesion(TipoProtocolo.DOMESTICO);
+            super(new Receiver());
+            sessionId = crearSesion(ProtocolType.DOMESTICO);
         }
 
         @Override

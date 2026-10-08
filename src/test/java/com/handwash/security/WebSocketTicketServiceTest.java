@@ -1,7 +1,7 @@
 package com.handwash.security;
 
-import com.handwash.agent.Receptor;
-import com.handwash.model.TipoProtocolo;
+import com.handwash.agent.Receiver;
+import com.handwash.model.ProtocolType;
 import com.handwash.service.SessionManager;
 import org.junit.jupiter.api.Test;
 
@@ -10,8 +10,8 @@ import static org.junit.jupiter.api.Assertions.*;
 class WebSocketTicketServiceTest {
     @Test
     void issuesOnlyForCurrentSessionCredentialsAndRejectsRevokedTickets() {
-        SessionManager sessions = new SessionManager(new Receptor());
-        String sessionId = sessions.crearSesion(TipoProtocolo.DOMESTICO);
+        SessionManager sessions = new SessionManager(new Receiver());
+        String sessionId = sessions.crearSesion(ProtocolType.DOMESTICO);
         WebSocketTicketService tickets = new WebSocketTicketService(
             sessions, new WebSocketTicketRegistry());
         try {
@@ -35,8 +35,8 @@ class WebSocketTicketServiceTest {
 
     @Test
     void ticketCannotSurviveSessionRemoval() {
-        SessionManager sessions = new SessionManager(new Receptor());
-        String sessionId = sessions.crearSesion(TipoProtocolo.DOMESTICO);
+        SessionManager sessions = new SessionManager(new Receiver());
+        String sessionId = sessions.crearSesion(ProtocolType.DOMESTICO);
         WebSocketTicketService tickets = new WebSocketTicketService(
             sessions, new WebSocketTicketRegistry());
         var issued = tickets.issue(sessionId, sessions.getOwnerToken(sessionId));

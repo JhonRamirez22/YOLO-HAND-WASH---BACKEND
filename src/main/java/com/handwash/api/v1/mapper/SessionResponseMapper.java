@@ -5,10 +5,10 @@ import com.handwash.api.v1.dto.FailedAttemptResponse;
 import com.handwash.api.v1.dto.FailedAttemptsResponse;
 import com.handwash.api.v1.dto.ProgressResponse;
 import com.handwash.api.v1.dto.ViolationResponse;
-import com.handwash.model.EstadoLavadoResponse;
-import com.handwash.model.Infraccion;
-import com.handwash.model.IntentoLavadoResumen;
-import com.handwash.model.Progreso;
+import com.handwash.model.HandwashingStatusResponse;
+import com.handwash.model.Violation;
+import com.handwash.model.HandwashingAttemptSummary;
+import com.handwash.model.Progress;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -17,7 +17,7 @@ import java.util.List;
 @Component
 public final class SessionResponseMapper {
     public FailedAttemptsResponse toFailedAttempts(String sessionId,
-                                                    List<IntentoLavadoResumen> attempts) {
+                                                    List<HandwashingAttemptSummary> attempts) {
         List<FailedAttemptResponse> mapped = attempts.stream().map(attempt ->
             new FailedAttemptResponse(attempt.numero(), attempt.resultado(),
                 attempt.motivoReinicio(), attempt.duracionMs(), attempt.tiempoPorPasoMs(),
@@ -26,7 +26,7 @@ public final class SessionResponseMapper {
         return new FailedAttemptsResponse(sessionId, mapped, true);
     }
 
-    public EvaluationResponse toEvaluation(EstadoLavadoResponse response) {
+    public EvaluationResponse toEvaluation(HandwashingStatusResponse response) {
         if (response == null) return null;
         List<ViolationResponse> history = response.getHistorialInfracciones() == null
             ? null : response.getHistorialInfracciones().stream().map(this::toViolation).toList();
@@ -59,14 +59,14 @@ public final class SessionResponseMapper {
             response.getDuracionMinimaObjetivoMs());
     }
 
-    private ViolationResponse toViolation(Infraccion violation) {
+    private ViolationResponse toViolation(Violation violation) {
         if (violation == null) return null;
         return new ViolationResponse(
             violation.getTipo() == null ? null : violation.getTipo().name(),
             violation.getDetalle(), violation.getPaso(), violation.getTimestamp());
     }
 
-    private ProgressResponse toProgress(Progreso progress) {
+    private ProgressResponse toProgress(Progress progress) {
         return progress == null ? null
             : new ProgressResponse(progress.getPasosCompletados(), progress.getPasosTotales());
     }

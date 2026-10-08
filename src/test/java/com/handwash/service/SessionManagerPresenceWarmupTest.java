@@ -1,12 +1,12 @@
 package com.handwash.service;
 
-import com.handwash.agent.Receptor;
-import com.handwash.model.DeteccionEvento;
-import com.handwash.model.EstadoSesion;
-import com.handwash.model.EvidenciaMovimiento;
-import com.handwash.model.EvidenciaPoseManos;
-import com.handwash.model.TipoProtocolo;
-import com.handwash.observer.DeteccionObserver;
+import com.handwash.agent.Receiver;
+import com.handwash.model.DetectionEvent;
+import com.handwash.model.HandwashingSessionState;
+import com.handwash.model.MovementEvidence;
+import com.handwash.model.HandPoseEvidence;
+import com.handwash.model.ProtocolType;
+import com.handwash.observer.DetectionObserver;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -23,11 +23,11 @@ class SessionManagerPresenceWarmupTest {
 
     @Test
     void strictProducerCannotSendStepsUntilJavaSeesThreeContinuousSecondsOfTwoHands() {
-        Receptor receptor = new Receptor();
+        Receiver receptor = new Receiver();
         AtomicInteger forwardedSteps = new AtomicInteger();
-        receptor.addObserver(new DeteccionObserver() {
+        receptor.addObserver(new DetectionObserver() {
             @Override
-            public void onDeteccion(DeteccionEvento evento) {
+            public void onDeteccion(DetectionEvent evento) {
                 forwardedSteps.incrementAndGet();
             }
         });
@@ -35,7 +35,7 @@ class SessionManagerPresenceWarmupTest {
         AtomicLong clock = new AtomicLong(System.nanoTime());
         ReflectionTestUtils.setField(manager, "monotonicNanos", (LongSupplier) clock::get);
         ReflectionTestUtils.setField(manager, "handPresenceWarmupMs", 3_000L);
-        String sessionId = manager.crearSesion(TipoProtocolo.DOMESTICO, true);
+        String sessionId = manager.crearSesion(ProtocolType.DOMESTICO, true);
         String ownerToken = manager.getOwnerToken(sessionId);
         try {
             var epochRegistration = manager.registrarProducerEpoch(sessionId, ownerToken);
@@ -50,7 +50,7 @@ class SessionManagerPresenceWarmupTest {
                     manager.procesarDeteccionHttp(presence(
                         sessionId, epoch, observation, observation, 2, receivedAt), ownerToken).outcome());
             }
-            assertEquals(EstadoSesion.ESPERANDO_INICIO,
+            assertEquals(HandwashingSessionState.ESPERANDO_INICIO,
                 manager.getSesion(sessionId).getEstadoSesion(),
                 "la presencia bilateral estable solo habilita detección; no inicia el lavado");
             assertEquals(0, manager.getSesion(sessionId).getNumeroIntentoActual(),
@@ -90,11 +90,11 @@ class SessionManagerPresenceWarmupTest {
 
     @Test
     void delayedStepFromBeforePresenceWatermarkCannotReachObserversAfterWarmup() {
-        Receptor receptor = new Receptor();
+        Receiver receptor = new Receiver();
         AtomicInteger forwardedSteps = new AtomicInteger();
-        receptor.addObserver(new DeteccionObserver() {
+        receptor.addObserver(new DetectionObserver() {
             @Override
-            public void onDeteccion(DeteccionEvento evento) {
+            public void onDeteccion(DetectionEvent evento) {
                 forwardedSteps.incrementAndGet();
             }
         });
@@ -102,7 +102,7 @@ class SessionManagerPresenceWarmupTest {
         AtomicLong clock = new AtomicLong(System.nanoTime());
         ReflectionTestUtils.setField(manager, "monotonicNanos", (LongSupplier) clock::get);
         ReflectionTestUtils.setField(manager, "handPresenceWarmupMs", 3_000L);
-        String sessionId = manager.crearSesion(TipoProtocolo.DOMESTICO, true);
+        String sessionId = manager.crearSesion(ProtocolType.DOMESTICO, true);
         String ownerToken = manager.getOwnerToken(sessionId);
         try {
             var registration = manager.registrarProducerEpoch(sessionId, ownerToken);
@@ -137,9 +137,9 @@ class SessionManagerPresenceWarmupTest {
         }
     }
 
-    private DeteccionEvento presence(String sessionId, String epoch, long controlSequence,
+    private DetectionEvent presence(String sessionId, String epoch, long controlSequence,
                                     long frameWatermark, int hands, long ingressAt) {
-        DeteccionEvento event = new DeteccionEvento(
+        DetectionEvent event = new DetectionEvent(
             sessionId, "PRESENCIA_MANOS", 1.0f, Instant.now().toString());
         event.setProducerEpoch(epoch);
         event.setEventType("PRESENCE");
@@ -151,20 +151,20 @@ class SessionManagerPresenceWarmupTest {
         return event;
     }
 
-    private DeteccionEvento step(String sessionId, String epoch, long sequence, long ingressAt) {
-        DeteccionEvento event = new DeteccionEvento(
+    private DetectionEvent step(String sessionId, String epoch, long sequence, long ingressAt) {
+        DetectionEvent event = new DetectionEvent(
             sessionId, "PASO_1_PALMAS", 0.95f, Instant.now().toString());
         event.setProducerEpoch(epoch);
         event.setEventType("DETECTION");
         event.setFrameSequence(sequence);
         event.setCaptureAgeMs(0L);
-        event.setEvidenciaMovimiento(new EvidenciaMovimiento(sequence, 2, 0.2, true, 0L));
+        event.setEvidenciaMovimiento(new MovementEvidence(sequence, 2, 0.2, true, 0L));
         event.setEvidenciaPoseManos(pose(sequence));
         event.setServerIngressAtMonotonicNanos(ingressAt);
         return event;
     }
 
-    private EvidenciaPoseManos pose(long sequence) {
+    private HandPoseEvidence pose(long sequence) {
         Double[][][] points = new Double[2][21][3];
         Double[][] boxes = new Double[2][4];
         double shift = 2.0 * Math.sin(sequence * Math.PI / 4.0);
@@ -184,6 +184,6 @@ class SessionManagerPresenceWarmupTest {
             }
             boxes[hand] = new Double[] {minX - 4, minY - 4, maxX + 4, maxY + 4};
         }
-        return new EvidenciaPoseManos(points, boxes, 640, 480);
+        return new HandPoseEvidence(points, boxes, 640, 480);
     }
 }

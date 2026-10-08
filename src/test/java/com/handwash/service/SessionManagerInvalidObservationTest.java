@@ -1,18 +1,18 @@
 package com.handwash.service;
 
-import com.handwash.agent.Receptor;
-import com.handwash.intention.CadenaIntencionLavado;
-import com.handwash.model.AccionOms;
-import com.handwash.model.DeteccionEvento;
-import com.handwash.model.EvidenciaMovimiento;
-import com.handwash.model.EstadoSesion;
-import com.handwash.model.IntentoLavadoResumen;
-import com.handwash.model.PasoLavado;
-import com.handwash.model.SesionLavado;
-import com.handwash.model.TipoInfraccion;
-import com.handwash.model.TipoProtocolo;
+import com.handwash.agent.Receiver;
+import com.handwash.intention.HandwashingIntentChain;
+import com.handwash.model.OmsAction;
+import com.handwash.model.DetectionEvent;
+import com.handwash.model.MovementEvidence;
+import com.handwash.model.HandwashingSessionState;
+import com.handwash.model.HandwashingAttemptSummary;
+import com.handwash.model.HandwashingStep;
+import com.handwash.model.HandwashingSession;
+import com.handwash.model.ViolationType;
+import com.handwash.model.ProtocolType;
 import com.handwash.repository.FailedAttemptStore;
-import com.handwash.strategy.ReglaValidacionStrategyFactory;
+import com.handwash.strategy.ValidationRuleStrategyFactory;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -27,15 +27,15 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SessionManagerInvalidObservationTest {
-    private static final CadenaIntencionLavado INTENTION =
-        new CadenaIntencionLavado(650, 650, 3, 1500, 0.75);
+    private static final HandwashingIntentChain INTENTION =
+        new HandwashingIntentChain(650, 650, 3, 1500, 0.75);
 
     @Test
     void malformedObservationBreaksStartVotesAndConsumesItsFreshEvidenceSequence() {
-        SessionManager manager = new SessionManager(new Receptor());
-        String sessionId = manager.crearSesion(TipoProtocolo.DOMESTICO);
+        SessionManager manager = new SessionManager(new Receiver());
+        String sessionId = manager.crearSesion(ProtocolType.DOMESTICO);
         try {
-            SesionLavado session = manager.getSesion(sessionId);
+            HandwashingSession session = manager.getSesion(sessionId);
             assertFalse(evaluar(session, evento(sessionId, "Paso1_Palmas", 1_000, 1)));
             assertFalse(evaluar(session, evento(sessionId, "Paso1_Palmas", 1_400, 2)));
 
@@ -59,10 +59,10 @@ class SessionManagerInvalidObservationTest {
 
     @Test
     void malformedObservationCannotAccreditDwellTimeAcrossItsGap() {
-        SessionManager manager = new SessionManager(new Receptor());
-        String sessionId = manager.crearSesion(TipoProtocolo.DOMESTICO);
+        SessionManager manager = new SessionManager(new Receiver());
+        String sessionId = manager.crearSesion(ProtocolType.DOMESTICO);
         try {
-            SesionLavado session = manager.getSesion(sessionId);
+            HandwashingSession session = manager.getSesion(sessionId);
             for (int index = 1; index <= 4; index++) {
                 assertEquals(index >= 3,
                     evaluar(session, evento(sessionId, "Paso1_Palmas", 1_000L + index * 400L, index)));
@@ -87,26 +87,26 @@ class SessionManagerInvalidObservationTest {
 
     @Test
     void malformedObservationAlsoRestartsAnActiveExperimentalOmsAttempt() {
-        SessionManager manager = new SessionManager(new Receptor());
+        SessionManager manager = new SessionManager(new Receiver());
         ReflectionTestUtils.setField(manager, "omsInputEnabled", true);
-        String sessionId = manager.crearSesion(TipoProtocolo.DOMESTICO);
+        String sessionId = manager.crearSesion(ProtocolType.DOMESTICO);
         try {
-            SesionLavado session = manager.getSesion(sessionId);
-            session.procesarAccionOms(AccionOms.MOJAR_MANOS, null, 1_000L, 0.95f);
-            session.procesarAccionOms(AccionOms.MOJAR_MANOS, null, 1_300L, 0.95f);
+            HandwashingSession session = manager.getSesion(sessionId);
+            session.procesarAccionOms(OmsAction.MOJAR_MANOS, null, 1_000L, 0.95f);
+            session.procesarAccionOms(OmsAction.MOJAR_MANOS, null, 1_300L, 0.95f);
             assertEquals(300L, session.getTiempoTotalActivoMs());
 
-            DeteccionEvento invalid = new DeteccionEvento(sessionId,
-                AccionOms.MOJAR_MANOS.getClaseModelo(), 0.95f, Instant.now().toString());
-            invalid.setEvidenciaMovimiento(new EvidenciaMovimiento(null, 2, 0.2, true, 100L));
+            DetectionEvent invalid = new DetectionEvent(sessionId,
+                OmsAction.MOJAR_MANOS.getClaseModelo(), 0.95f, Instant.now().toString());
+            invalid.setEvidenciaMovimiento(new MovementEvidence(null, 2, 0.2, true, 100L));
             SessionManager.DetectionResult result = manager.procesarDeteccionHttp(
                 invalid, manager.getOwnerToken(sessionId));
 
             assertEquals(SessionManager.DetectionOutcome.INVALID, result.outcome());
             assertEquals(0L, session.getTiempoTotalActivoMs());
-            assertEquals(EstadoSesion.ESPERANDO_INICIO, session.getEstadoSesion());
+            assertEquals(HandwashingSessionState.ESPERANDO_INICIO, session.getEstadoSesion());
             assertEquals(1, session.getIntentosReiniciados());
-            assertEquals(TipoInfraccion.EVIDENCIA_VISUAL_INTERRUPTA,
+            assertEquals(ViolationType.EVIDENCIA_VISUAL_INTERRUPTA,
                 session.getInfraccionActual().getTipo());
         } finally {
             manager.eliminarSesion(sessionId);
@@ -117,12 +117,12 @@ class SessionManagerInvalidObservationTest {
     void malformedOmsObservationQueuesArchivedAttemptForPersistence() {
         RecordingFailedAttemptStore store = new RecordingFailedAttemptStore();
         SessionManager manager = managerWith(store);
-        String sessionId = manager.crearSesion(TipoProtocolo.DOMESTICO);
+        String sessionId = manager.crearSesion(ProtocolType.DOMESTICO);
         try {
-            SesionLavado session = startOmsAttempt(manager, sessionId);
-            DeteccionEvento invalid = new DeteccionEvento(sessionId,
-                AccionOms.MOJAR_MANOS.getClaseModelo(), 0.95f, Instant.now().toString());
-            invalid.setEvidenciaMovimiento(new EvidenciaMovimiento(null, 2, 0.2, true, 100L));
+            HandwashingSession session = startOmsAttempt(manager, sessionId);
+            DetectionEvent invalid = new DetectionEvent(sessionId,
+                OmsAction.MOJAR_MANOS.getClaseModelo(), 0.95f, Instant.now().toString());
+            invalid.setEvidenciaMovimiento(new MovementEvidence(null, 2, 0.2, true, 100L));
 
             SessionManager.DetectionResult result = manager.procesarDeteccionHttp(
                 invalid, manager.getOwnerToken(sessionId));
@@ -143,10 +143,10 @@ class SessionManagerInvalidObservationTest {
     void inactivityExpiryQueuesArchivedAttemptForPersistence() {
         RecordingFailedAttemptStore store = new RecordingFailedAttemptStore();
         SessionManager manager = managerWith(store);
-        String sessionId = manager.crearSesion(TipoProtocolo.DOMESTICO);
+        String sessionId = manager.crearSesion(ProtocolType.DOMESTICO);
         try {
             ReflectionTestUtils.setField(manager, "timeoutMinutes", 1L);
-            SesionLavado session = startOmsAttempt(manager, sessionId);
+            HandwashingSession session = startOmsAttempt(manager, sessionId);
             Object omsSession = ReflectionTestUtils.getField(session, "sesionOms");
             ReflectionTestUtils.setField(omsSession, "lastActivityMs",
                 System.currentTimeMillis() - TimeUnit.MINUTES.toMillis(2));
@@ -154,7 +154,7 @@ class SessionManagerInvalidObservationTest {
                 System.nanoTime() - TimeUnit.MINUTES.toNanos(2));
 
             manager.expirarSesionesInactivas();
-            assertEquals(EstadoSesion.EXPIRADA, session.getEstadoSesion());
+            assertEquals(HandwashingSessionState.EXPIRADA, session.getEstadoSesion());
             assertEquals(1, session.getIntentosReiniciados());
 
             manager.persistirIntentosFallidosPendientes();
@@ -163,7 +163,7 @@ class SessionManagerInvalidObservationTest {
                 "an incomplete attempt closed by inactivity must reach the bounded failure cache");
             assertEquals("SESION_EXPIRADA_POR_INACTIVIDAD",
                 store.persisted.get(0).motivoReinicio());
-            assertEquals(TipoInfraccion.EVIDENCIA_VISUAL_INTERRUPTA,
+            assertEquals(ViolationType.EVIDENCIA_VISUAL_INTERRUPTA,
                 store.persisted.get(0).infracciones().get(0).getTipo());
         } finally {
             manager.eliminarSesion(sessionId);
@@ -174,7 +174,7 @@ class SessionManagerInvalidObservationTest {
     void retentionSweepProtectsEverySessionStillRegisteredInMemory() {
         RecordingFailedAttemptStore store = new RecordingFailedAttemptStore();
         SessionManager manager = managerWith(store);
-        String sessionId = manager.crearSesion(TipoProtocolo.DOMESTICO);
+        String sessionId = manager.crearSesion(ProtocolType.DOMESTICO);
         try {
             manager.limpiarSesionesTerminadas();
 
@@ -189,11 +189,11 @@ class SessionManagerInvalidObservationTest {
     void omsObservationWithoutRecentSpatialEvidenceCannotContinueAnActiveAttempt() {
         RecordingFailedAttemptStore store = new RecordingFailedAttemptStore();
         SessionManager manager = managerWith(store);
-        String sessionId = manager.crearSesion(TipoProtocolo.DOMESTICO);
+        String sessionId = manager.crearSesion(ProtocolType.DOMESTICO);
         try {
-            SesionLavado session = startOmsAttempt(manager, sessionId);
-            DeteccionEvento missingEvidence = new DeteccionEvento(sessionId,
-                AccionOms.MOJAR_MANOS.getClaseModelo(), 0.95f, Instant.now().toString());
+            HandwashingSession session = startOmsAttempt(manager, sessionId);
+            DetectionEvent missingEvidence = new DetectionEvent(sessionId,
+                OmsAction.MOJAR_MANOS.getClaseModelo(), 0.95f, Instant.now().toString());
 
             SessionManager.DetectionResult result = manager.procesarDeteccionHttp(
                 missingEvidence, manager.getOwnerToken(sessionId));
@@ -201,7 +201,7 @@ class SessionManagerInvalidObservationTest {
             assertEquals(SessionManager.DetectionOutcome.INVALID, result.outcome());
             assertTrue(result.detail().contains("pose bilateral"));
             assertEquals(0L, session.getTiempoTotalActivoMs());
-            assertEquals(EstadoSesion.ESPERANDO_INICIO, session.getEstadoSesion());
+            assertEquals(HandwashingSessionState.ESPERANDO_INICIO, session.getEstadoSesion());
             assertEquals(1, session.getIntentosReiniciados());
 
             manager.persistirIntentosFallidosPendientes();
@@ -216,12 +216,12 @@ class SessionManagerInvalidObservationTest {
     void confidenceFilteredOmsObservationQueuesArchivedAttemptForPersistence() {
         RecordingFailedAttemptStore store = new RecordingFailedAttemptStore();
         SessionManager manager = managerWith(store);
-        String sessionId = manager.crearSesion(TipoProtocolo.DOMESTICO);
+        String sessionId = manager.crearSesion(ProtocolType.DOMESTICO);
         try {
-            SesionLavado session = startOmsAttempt(manager, sessionId);
-            DeteccionEvento filtered = new DeteccionEvento(sessionId,
-                AccionOms.MOJAR_MANOS.getClaseModelo(), 0.2f, Instant.now().toString());
-            filtered.setEvidenciaMovimiento(new EvidenciaMovimiento(1L, 2, 0.2, true, 100L));
+            HandwashingSession session = startOmsAttempt(manager, sessionId);
+            DetectionEvent filtered = new DetectionEvent(sessionId,
+                OmsAction.MOJAR_MANOS.getClaseModelo(), 0.2f, Instant.now().toString());
+            filtered.setEvidenciaMovimiento(new MovementEvidence(1L, 2, 0.2, true, 100L));
 
             SessionManager.DetectionResult result = manager.procesarDeteccionHttp(
                 filtered, manager.getOwnerToken(sessionId));
@@ -240,31 +240,31 @@ class SessionManagerInvalidObservationTest {
 
     private static SessionManager managerWith(FailedAttemptStore store) {
         SessionManager manager = new SessionManager(
-            new Receptor(), new ReglaValidacionStrategyFactory(), store);
+            new Receiver(), new ValidationRuleStrategyFactory(), store);
         ReflectionTestUtils.setField(manager, "omsInputEnabled", true);
         return manager;
     }
 
-    private static SesionLavado startOmsAttempt(SessionManager manager, String sessionId) {
-        SesionLavado session = manager.getSesion(sessionId);
-        session.procesarAccionOms(AccionOms.MOJAR_MANOS, null, 1_000L, 0.95f);
-        session.procesarAccionOms(AccionOms.MOJAR_MANOS, null, 1_300L, 0.95f);
+    private static HandwashingSession startOmsAttempt(SessionManager manager, String sessionId) {
+        HandwashingSession session = manager.getSesion(sessionId);
+        session.procesarAccionOms(OmsAction.MOJAR_MANOS, null, 1_000L, 0.95f);
+        session.procesarAccionOms(OmsAction.MOJAR_MANOS, null, 1_300L, 0.95f);
         assertEquals(300L, session.getTiempoTotalActivoMs());
         return session;
     }
 
     private static final class RecordingFailedAttemptStore implements FailedAttemptStore {
-        private final List<IntentoLavadoResumen> persisted = new ArrayList<>();
+        private final List<HandwashingAttemptSummary> persisted = new ArrayList<>();
         private Set<String> retainedSessions = Set.of();
 
         @Override
-        public void insertIfAbsent(String sessionId, IntentoLavadoResumen attempt) {
+        public void insertIfAbsent(String sessionId, HandwashingAttemptSummary attempt) {
             if (persisted.stream().noneMatch(existing -> existing.numero() == attempt.numero())) {
                 persisted.add(attempt);
             }
         }
 
-        @Override public List<IntentoLavadoResumen> findBySession(String sessionId) {
+        @Override public List<HandwashingAttemptSummary> findBySession(String sessionId) {
             return List.copyOf(persisted);
         }
         @Override public int deleteBySession(String sessionId) {
@@ -279,7 +279,7 @@ class SessionManagerInvalidObservationTest {
         }
     }
 
-    private static boolean evaluar(SesionLavado session, DeteccionEvento event) {
+    private static boolean evaluar(HandwashingSession session, DetectionEvent event) {
         boolean accepted = session.evaluarIntencion(event, INTENTION);
         if (accepted) {
             session.procesarDeteccion(event.getPasoLavadoResuelto(),
@@ -288,11 +288,11 @@ class SessionManagerInvalidObservationTest {
         return accepted;
     }
 
-    private static DeteccionEvento evento(String sessionId, String label, long time, long sequence) {
-        DeteccionEvento event = new DeteccionEvento(sessionId, label, 0.95f,
+    private static DetectionEvent evento(String sessionId, String label, long time, long sequence) {
+        DetectionEvent event = new DetectionEvent(sessionId, label, 0.95f,
             Instant.now().toString());
         event.setServerReceivedAtMonotonicMs(time);
-        event.setEvidenciaMovimiento(new EvidenciaMovimiento(sequence, 2, 0.2, true, 100L));
+        event.setEvidenciaMovimiento(new MovementEvidence(sequence, 2, 0.2, true, 100L));
         return event;
     }
 }

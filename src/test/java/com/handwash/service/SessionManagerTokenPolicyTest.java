@@ -14,7 +14,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import com.handwash.model.TipoProtocolo;
+import com.handwash.model.ProtocolType;
 
 class SessionManagerTokenPolicyTest {
     @Test
@@ -75,9 +75,9 @@ class SessionManagerTokenPolicyTest {
 
     @Test
     void terminalSessionRetentionStillExpiresAfterBackwardWallClockCorrection() {
-        SessionManager manager = new SessionManager(new com.handwash.agent.Receptor());
+        SessionManager manager = new SessionManager(new com.handwash.agent.Receiver());
         ReflectionTestUtils.setField(manager, "terminalRetentionMinutes", 1L);
-        String sessionId = manager.crearSesion(TipoProtocolo.DOMESTICO);
+        String sessionId = manager.crearSesion(ProtocolType.DOMESTICO);
         var session = manager.getSesion(sessionId);
         session.expirar();
 
@@ -102,7 +102,7 @@ class SessionManagerTokenPolicyTest {
             (java.util.function.LongSupplier) monotonicClock::get);
         ReflectionTestUtils.setField(manager, "epochMillis",
             (java.util.function.LongSupplier) wallClock::get);
-        String sessionId = manager.crearSesion(TipoProtocolo.DOMESTICO);
+        String sessionId = manager.crearSesion(ProtocolType.DOMESTICO);
         String token = manager.getOwnerToken(sessionId);
 
         assertNotNull(token);
@@ -127,7 +127,7 @@ class SessionManagerTokenPolicyTest {
             (java.util.function.LongSupplier) monotonicClock::get);
         ReflectionTestUtils.setField(manager, "epochMillis",
             (java.util.function.LongSupplier) wallClock::get);
-        String sessionId = manager.crearSesion(TipoProtocolo.DOMESTICO);
+        String sessionId = manager.crearSesion(ProtocolType.DOMESTICO);
 
         SessionManager.TokenIssue loginToken = manager.emitirTokenDispositivo(sessionId);
         assertNotNull(loginToken);
@@ -148,7 +148,7 @@ class SessionManagerTokenPolicyTest {
             (java.util.function.LongSupplier) monotonicClock::get);
         ReflectionTestUtils.setField(manager, "epochMillis",
             (java.util.function.LongSupplier) wallClock::get);
-        String sessionId = manager.crearSesion(TipoProtocolo.DOMESTICO);
+        String sessionId = manager.crearSesion(ProtocolType.DOMESTICO);
         String token = manager.getOwnerToken(sessionId);
 
         SessionManager.AccessInfo access = manager.autenticar(sessionId, token);
@@ -163,7 +163,7 @@ class SessionManagerTokenPolicyTest {
     @Test
     void deviceTokenRotationChangesCredentialRevisionWithoutRevokingOwner() {
         SessionManager manager = new SessionManager(null);
-        String sessionId = manager.crearSesion(TipoProtocolo.DOMESTICO);
+        String sessionId = manager.crearSesion(ProtocolType.DOMESTICO);
         String ownerToken = manager.getOwnerToken(sessionId);
         String oldDeviceToken = manager.getDeviceToken(sessionId);
         SessionManager.AccessInfo ownerAccess = manager.autenticar(sessionId, ownerToken);
@@ -182,7 +182,7 @@ class SessionManagerTokenPolicyTest {
     @Test
     void dashboardCredentialIsReadOnlyAndRotatesIndependentlyFromProducerCredentials() {
         SessionManager manager = new SessionManager(null);
-        String sessionId = manager.crearSesion(TipoProtocolo.DOMESTICO, true);
+        String sessionId = manager.crearSesion(ProtocolType.DOMESTICO, true);
         String ownerToken = manager.getOwnerToken(sessionId);
         String deviceToken = manager.getDeviceToken(sessionId);
 

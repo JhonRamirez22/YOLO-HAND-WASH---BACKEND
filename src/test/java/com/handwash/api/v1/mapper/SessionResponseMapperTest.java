@@ -2,11 +2,11 @@ package com.handwash.api.v1.mapper;
 
 import com.handwash.api.v1.dto.SessionDetailsResponse;
 import com.handwash.api.v1.dto.FailedAttemptsResponse;
-import com.handwash.model.EstadoLavadoResponse;
-import com.handwash.model.Infraccion;
-import com.handwash.model.IntentoLavadoResumen;
-import com.handwash.model.Progreso;
-import com.handwash.model.TipoInfraccion;
+import com.handwash.model.HandwashingStatusResponse;
+import com.handwash.model.Violation;
+import com.handwash.model.HandwashingAttemptSummary;
+import com.handwash.model.Progress;
+import com.handwash.model.ViolationType;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -22,7 +22,7 @@ class SessionResponseMapperTest {
 
     @Test
     void mapsDomainSnapshotToV1DtosWithoutChangingPublicFieldNamesOrValues() {
-        EstadoLavadoResponse domain = new EstadoLavadoResponse();
+        HandwashingStatusResponse domain = new HandwashingStatusResponse();
         domain.setSessionId("session");
         domain.setEstadoIntencion("CONFIRMADA");
         domain.setMotivoIntencion("dos manos visibles");
@@ -31,9 +31,9 @@ class SessionResponseMapperTest {
         domain.setManosVisibles(2);
         domain.setEstadoActual("PASO_1_PALMAS");
         domain.setTiempoAcumuladoMs(1250);
-        domain.setInfraccion(new Infraccion(TipoInfraccion.PASO_OMITIDO,
+        domain.setInfraccion(new Violation(ViolationType.PASO_OMITIDO,
             "secuencia incorrecta", "PASO_2_DORSOS", "2026-10-02T00:00:00Z"));
-        domain.setProgreso(new Progreso(1, 7));
+        domain.setProgreso(new Progress(1, 7));
         domain.setHistorialInfracciones(List.of(domain.getInfraccion()));
         domain.setCoberturaJabon(Map.of("PALMA_IZQUIERDA", "ESPUMA_VISIBLE"));
 
@@ -55,9 +55,9 @@ class SessionResponseMapperTest {
 
     @Test
     void projectsFailedAttemptHistoryWithoutReturningDomainObjects() {
-        var attempt = new IntentoLavadoResumen(2, "REINICIADO", "paso omitido", 1500,
+        var attempt = new HandwashingAttemptSummary(2, "REINICIADO", "paso omitido", 1500,
             Map.of("PASO_1_PALMAS", 800L),
-            List.of(new Infraccion(TipoInfraccion.PASO_OMITIDO,
+            List.of(new Violation(ViolationType.PASO_OMITIDO,
                 "paso incorrecto", "PASO_3_INTERDIGITALES", "2026-10-02T00:00:00Z")));
 
         var response = mapper.toFailedAttempts("session", List.of(attempt));

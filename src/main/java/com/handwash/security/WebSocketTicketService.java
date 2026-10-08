@@ -1,6 +1,6 @@
 package com.handwash.security;
 
-import com.handwash.model.SesionLavado;
+import com.handwash.model.HandwashingSession;
 import com.handwash.service.SessionManager;
 import org.springframework.stereotype.Service;
 
@@ -20,7 +20,7 @@ public final class WebSocketTicketService {
     }
 
     public IssueResult issue(String sessionId, String accessToken) {
-        SesionLavado session = sessionManager.getSesion(sessionId);
+        HandwashingSession session = sessionManager.getSesion(sessionId);
         if (session == null) return new IssueResult(IssueOutcome.NOT_FOUND, null);
         synchronized (session) {
             if (sessionManager.getSesion(sessionId) != session) {
@@ -42,7 +42,7 @@ public final class WebSocketTicketService {
     public SessionManager.AccessInfo consume(String sessionId, String ticket) {
         WebSocketTicketRegistry.TicketGrant grant = ticketRegistry.consume(sessionId, ticket);
         if (grant == null) return null;
-        SesionLavado session = sessionManager.getSesion(sessionId);
+        HandwashingSession session = sessionManager.getSesion(sessionId);
         if (session == null) return null;
         synchronized (session) {
             if (sessionManager.getSesion(sessionId) != session

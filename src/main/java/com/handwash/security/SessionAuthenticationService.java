@@ -1,7 +1,7 @@
 package com.handwash.security;
 
-import com.handwash.model.EstadoSesion;
-import com.handwash.model.SesionLavado;
+import com.handwash.model.HandwashingSessionState;
+import com.handwash.model.HandwashingSession;
 import com.handwash.service.SessionManager;
 import org.springframework.stereotype.Service;
 
@@ -10,12 +10,12 @@ import org.springframework.stereotype.Service;
 public class SessionAuthenticationService {
     public enum Failure { INVALID_CODE, SESSION_TERMINATED, PRODUCER_VERSION_REQUIRED }
 
-    public record DeviceLogin(SesionLavado session, SessionManager.TokenIssue token,
+    public record DeviceLogin(HandwashingSession session, SessionManager.TokenIssue token,
                               int protocolVersion, Failure failure) {
         public boolean successful() { return session != null && token != null && failure == null; }
     }
 
-    public record DashboardLogin(SesionLavado session, SessionManager.TokenIssue token,
+    public record DashboardLogin(HandwashingSession session, SessionManager.TokenIssue token,
                                  Failure failure) {
         public boolean successful() { return session != null && token != null && failure == null; }
     }
@@ -27,12 +27,12 @@ public class SessionAuthenticationService {
     }
 
     public DeviceLogin loginWithPairingCode(String code, int protocolVersion) {
-        SesionLavado session = sessionManager.getSesionPorCodigo(code);
+        HandwashingSession session = sessionManager.getSesionPorCodigo(code);
         if (session == null) return new DeviceLogin(null, null, protocolVersion, Failure.INVALID_CODE);
         synchronized (session) {
             if (sessionManager.getSesion(session.getSessionId()) != session
-                || session.getEstadoSesion() == EstadoSesion.COMPLETADA
-                || session.getEstadoSesion() == EstadoSesion.EXPIRADA) {
+                || session.getEstadoSesion() == HandwashingSessionState.COMPLETADA
+                || session.getEstadoSesion() == HandwashingSessionState.EXPIRADA) {
                 return new DeviceLogin(null, null, protocolVersion, Failure.SESSION_TERMINATED);
             }
             if (protocolVersion == 2 && !sessionManager.requireProducerEpoch(session.getSessionId())) {
@@ -51,12 +51,12 @@ public class SessionAuthenticationService {
 
     /** Authenticates the dashboard with a read-only token; it must not rotate a producer epoch. */
     public DashboardLogin loginDashboardWithPairingCode(String code) {
-        SesionLavado session = sessionManager.getSesionPorCodigo(code);
+        HandwashingSession session = sessionManager.getSesionPorCodigo(code);
         if (session == null) return new DashboardLogin(null, null, Failure.INVALID_CODE);
         synchronized (session) {
             if (sessionManager.getSesion(session.getSessionId()) != session
-                || session.getEstadoSesion() == EstadoSesion.COMPLETADA
-                || session.getEstadoSesion() == EstadoSesion.EXPIRADA) {
+                || session.getEstadoSesion() == HandwashingSessionState.COMPLETADA
+                || session.getEstadoSesion() == HandwashingSessionState.EXPIRADA) {
                 return new DashboardLogin(null, null, Failure.SESSION_TERMINATED);
             }
             SessionManager.TokenIssue token = sessionManager.emitirTokenDashboard(session.getSessionId());

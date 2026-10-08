@@ -1,11 +1,11 @@
 package com.handwash.controller;
 
-import com.handwash.model.DeteccionEvento;
-import com.handwash.model.SesionLavado;
-import com.handwash.model.EstadoSesion;
+import com.handwash.model.DetectionEvent;
+import com.handwash.model.HandwashingSession;
+import com.handwash.model.HandwashingSessionState;
 import com.handwash.service.SessionManager;
 import com.handwash.service.HandwashMetrics;
-import com.handwash.service.ModoDeteccionIncompatibleException;
+import com.handwash.service.IncompatibleDetectionModeException;
 import com.handwash.observer.DetectionPipelineException;
 import com.handwash.api.v1.dto.DetectionRequest;
 import com.handwash.api.v1.dto.DetectionAckResponse;
@@ -49,16 +49,16 @@ public class DetectionController {
         @RequestParam(value = "includeState", defaultValue = "false") boolean includeState) {
         long requestIngressAtNanos = System.nanoTime();
         String accessToken = tokenResolver.resolve(authorization, legacyToken);
-        DeteccionEvento evento = requestMapper.toDomain(request);
+        DetectionEvent evento = requestMapper.toDomain(request);
         if (evento != null) evento.setServerIngressAtMonotonicNanos(requestIngressAtNanos);
         SessionManager.DetectionResult result;
         try {
             result = sessionManager.procesarDeteccionHttp(evento, accessToken);
-        } catch (ModoDeteccionIncompatibleException conflict) {
+        } catch (IncompatibleDetectionModeException conflict) {
             return ResponseEntity.status(409).body(ApiErrorResponse.withMessage(
                 "MODO_DETECCION_INCOMPATIBLE", conflict.getMessage()));
         } catch (DetectionPipelineException failure) {
-            SesionLavado failedSession = evento == null
+            HandwashingSession failedSession = evento == null
                 ? null : sessionManager.getSesion(evento.getSessionId());
             return ResponseEntity.internalServerError().body(ApiErrorResponse.withState(
                 "ERROR_PROCESAMIENTO",
@@ -93,14 +93,14 @@ public class DetectionController {
         if (!includeState) {
             return ackResponse.body(accepted ? ACK_ACCEPTED : ACK_FILTERED);
         }
-        SesionLavado sesion = result.session();
+        HandwashingSession sesion = result.session();
         synchronized (sesion) {
             if (sessionManager.getSesion(evento.getSessionId()) != sesion) {
                 return ResponseEntity.notFound().build();
             }
             if (!accepted
-                && (sesion.getEstadoSesion() == EstadoSesion.COMPLETADA
-                    || sesion.getEstadoSesion() == EstadoSesion.EXPIRADA)) {
+                && (sesion.getEstadoSesion() == HandwashingSessionState.COMPLETADA
+                    || sesion.getEstadoSesion() == HandwashingSessionState.EXPIRADA)) {
                 return ResponseEntity.status(409).body(ApiErrorResponse.of("Sesión terminada"));
             }
             // The diagnostic snapshot uses the v1 projection too; the default

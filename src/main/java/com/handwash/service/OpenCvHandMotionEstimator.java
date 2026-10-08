@@ -1,6 +1,6 @@
 package com.handwash.service;
 
-import com.handwash.model.EvidenciaPoseManos;
+import com.handwash.model.HandPoseEvidence;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import org.bytedeco.javacpp.indexer.DoubleIndexer;
@@ -27,7 +27,7 @@ public final class OpenCvHandMotionEstimator {
 
     public record Estimate(int visibleHands, double movementNormalized, boolean valid) {}
 
-    private record Sample(long sequence, long observedAtNanos, EvidenciaPoseManos pose) {}
+    private record Sample(long sequence, long observedAtNanos, HandPoseEvidence pose) {}
 
     private static final class SessionState {
         private String epoch;
@@ -37,7 +37,7 @@ public final class OpenCvHandMotionEstimator {
     private final Map<String, SessionState> sessions = new ConcurrentHashMap<>();
 
     public Estimate observe(String sessionId, String epoch, long sequence,
-                            long observedAtNanos, EvidenciaPoseManos pose) {
+                            long observedAtNanos, HandPoseEvidence pose) {
         if (sessionId == null || sessionId.isBlank() || epoch == null || epoch.isBlank()) {
             return invalid(0);
         }
@@ -97,8 +97,8 @@ public final class OpenCvHandMotionEstimator {
         if (sessionId != null) sessions.remove(sessionId);
     }
 
-    private static double normalizedResidual(EvidenciaPoseManos before,
-                                             EvidenciaPoseManos after,
+    private static double normalizedResidual(HandPoseEvidence before,
+                                             HandPoseEvidence after,
                                              boolean swapHands) {
         double[] sourceX = new double[42];
         double[] sourceY = new double[42];
@@ -174,7 +174,7 @@ public final class OpenCvHandMotionEstimator {
         }
     }
 
-    private static boolean handsAreClose(EvidenciaPoseManos pose) {
+    private static boolean handsAreClose(HandPoseEvidence pose) {
         double firstWidth = pose.boxCoordinate(0, 2) - pose.boxCoordinate(0, 0);
         double firstHeight = pose.boxCoordinate(0, 3) - pose.boxCoordinate(0, 1);
         double secondWidth = pose.boxCoordinate(1, 2) - pose.boxCoordinate(1, 0);

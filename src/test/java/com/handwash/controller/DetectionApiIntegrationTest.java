@@ -3,16 +3,16 @@ package com.handwash.controller;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import com.handwash.service.SessionManager;
-import com.handwash.agent.Receptor;
-import com.handwash.agent.Notificador;
-import com.handwash.model.EstadoLavadoResponse;
-import com.handwash.model.DeteccionEvento;
-import com.handwash.observer.DeteccionObserver;
-import com.handwash.model.EstadoSesion;
-import com.handwash.model.TipoInfraccion;
-import com.handwash.model.PasoLavado;
-import com.handwash.model.TipoProtocolo;
-import com.handwash.strategy.ReglaValidacionStrategyFactory;
+import com.handwash.agent.Receiver;
+import com.handwash.agent.Notifier;
+import com.handwash.model.HandwashingStatusResponse;
+import com.handwash.model.DetectionEvent;
+import com.handwash.observer.DetectionObserver;
+import com.handwash.model.HandwashingSessionState;
+import com.handwash.model.ViolationType;
+import com.handwash.model.HandwashingStep;
+import com.handwash.model.ProtocolType;
+import com.handwash.strategy.ValidationRuleStrategyFactory;
 import com.handwash.api.v1.dto.EvaluationResponse;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.AfterEach;
@@ -75,10 +75,10 @@ class DetectionApiIntegrationTest {
     @Autowired TestRestTemplate http;
     @Autowired ObjectMapper mapper;
     @Autowired SessionManager manager;
-    @Autowired Receptor receptor;
-    @Autowired Notificador notificador;
+    @Autowired Receiver receptor;
+    @Autowired Notifier notificador;
     @Autowired MeterRegistry meterRegistry;
-    @Autowired ReglaValidacionStrategyFactory strategyFactory;
+    @Autowired ValidationRuleStrategyFactory strategyFactory;
     @LocalServerPort int port;
     private final Set<String> producerSessionsToCleanup = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
@@ -277,7 +277,7 @@ class DetectionApiIntegrationTest {
             manager, "handPresenceWarmupMs");
         ReflectionTestUtils.setField(manager, "handPresenceWarmupMs", 3_000L);
         ProducerSession producer = null;
-        DeteccionObserver observer = null;
+        DetectionObserver observer = null;
         AtomicInteger publishedSteps = new AtomicInteger();
         try {
             producer = createProducerSession();
@@ -292,7 +292,7 @@ class DetectionApiIntegrationTest {
                 producerEvent(producer, producer.epoch(), 2L, 2L)), true);
             assertEquals(0, publishedSteps.get(),
                 "a step before the three-second dwell must not reach the observer pipeline");
-            assertNotEquals(EstadoSesion.EN_PROGRESO,
+            assertNotEquals(HandwashingSessionState.EN_PROGRESO,
                 manager.getSesion(producer.id()).getEstadoSesion(),
                 "hands alone must not start the wash");
 
@@ -314,7 +314,7 @@ class DetectionApiIntegrationTest {
             }
             assertEquals(3, publishedSteps.get(),
                 "only confirmed palms observations should enter the pipeline after warmup");
-            assertEquals(EstadoSesion.EN_PROGRESO,
+            assertEquals(HandwashingSessionState.EN_PROGRESO,
                 manager.getSesion(producer.id()).getEstadoSesion());
 
             assertAck(cameraPost(producer.id(), producer.token(),
@@ -356,7 +356,7 @@ class DetectionApiIntegrationTest {
             }
 
             var session = manager.getSesion(producer.id());
-            assertEquals(EstadoSesion.ESPERANDO_INICIO, session.getEstadoSesion());
+            assertEquals(HandwashingSessionState.ESPERANDO_INICIO, session.getEstadoSesion());
             assertEquals(0L, session.getTiempoTotalActivoMs());
             assertEquals("MANOS_PRESENTES",
                 session.getEstadoActualResponse().getEstadoIntencion());
@@ -369,7 +369,7 @@ class DetectionApiIntegrationTest {
     void accessTokensAreRejectedAfterTheirConfiguredLifetime() throws Exception {
         long originalTtl = (long) ReflectionTestUtils.getField(manager, "accessTokenTtlMs");
         ReflectionTestUtils.setField(manager, "accessTokenTtlMs", 1_000L);
-        String id = manager.crearSesion(TipoProtocolo.DOMESTICO);
+        String id = manager.crearSesion(ProtocolType.DOMESTICO);
         try {
             String token = manager.getOwnerToken(id);
             assertNotNull(token);
@@ -510,7 +510,7 @@ class DetectionApiIntegrationTest {
             assertEquals("MODO_DETECCION_INCOMPATIBLE",
                 mapper.readTree(response.getBody()).get("error").asText());
             assertNull(manager.getSesion(producer.id()).getModoEvaluacionSeleccionado());
-            assertEquals(EstadoSesion.ESPERANDO_INICIO,
+            assertEquals(HandwashingSessionState.ESPERANDO_INICIO,
                 manager.getSesion(producer.id()).getEstadoSesion());
         } finally {
             ReflectionTestUtils.setField(manager, "omsInputEnabled", previous);
@@ -521,7 +521,7 @@ class DetectionApiIntegrationTest {
     void duplicateAndOutOfOrderFramesAreFilteredWithoutReachingObservers() throws Exception {
         ProducerSession producer = createProducerSession();
         AtomicInteger observations = new AtomicInteger();
-        DeteccionObserver observer = event -> {
+        DetectionObserver observer = event -> {
             if (producer.id().equals(event.getSessionId())) observations.incrementAndGet();
         };
         receptor.addObserver(observer);
@@ -583,7 +583,7 @@ class DetectionApiIntegrationTest {
     void eventAndSpatialEvidenceSequenceMismatchHasNoObserverSideEffect() throws Exception {
         ProducerSession producer = createProducerSession();
         AtomicInteger observations = new AtomicInteger();
-        DeteccionObserver observer = event -> {
+        DetectionObserver observer = event -> {
             if (producer.id().equals(event.getSessionId())) observations.incrementAndGet();
         };
         receptor.addObserver(observer);
@@ -607,7 +607,7 @@ class DetectionApiIntegrationTest {
     void strictProducerRejectsLegacyClassAliasesWithoutPublishingOrConsumingFrame() throws Exception {
         ProducerSession producer = createProducerSession();
         AtomicInteger observations = new AtomicInteger();
-        DeteccionObserver observer = event -> {
+        DetectionObserver observer = event -> {
             if (producer.id().equals(event.getSessionId())) observations.incrementAndGet();
         };
         receptor.addObserver(observer);
@@ -644,7 +644,7 @@ class DetectionApiIntegrationTest {
         Map<String, Object> evidence = Map.of(
             "PALMA_IZQUIERDA", Map.of("estado", "ESPUMA_VISIBLE", "confianza", 0.95));
         AtomicInteger observations = new AtomicInteger();
-        DeteccionObserver observer = event -> {
+        DetectionObserver observer = event -> {
             if (producer.id().equals(event.getSessionId())) observations.incrementAndGet();
         };
         receptor.addObserver(observer);
@@ -742,7 +742,7 @@ class DetectionApiIntegrationTest {
     void controlEnvelopeCannotCarrySoapEvidenceOrMutateTheSession() throws Exception {
         ProducerSession producer = createProducerSession();
         AtomicInteger observations = new AtomicInteger();
-        DeteccionObserver observer = event -> {
+        DetectionObserver observer = event -> {
             if (producer.id().equals(event.getSessionId())) observations.incrementAndGet();
         };
         receptor.addObserver(observer);
@@ -775,8 +775,8 @@ class DetectionApiIntegrationTest {
     void registrationAndLateOldEventRaceIsSerializedByTheSessionLock() throws Exception {
         ProducerSession producer = createProducerSession();
         var session = manager.getSesion(producer.id());
-        DeteccionEvento oldEvent = mapper.convertValue(
-            producerEvent(producer, producer.epoch(), 2, null), DeteccionEvento.class);
+        DetectionEvent oldEvent = mapper.convertValue(
+            producerEvent(producer, producer.epoch(), 2, null), DetectionEvent.class);
         CountDownLatch attempting = new CountDownLatch(1);
         AtomicReference<SessionManager.DetectionResult> result = new AtomicReference<>();
         Thread delayed = new Thread(() -> {
@@ -955,7 +955,7 @@ class DetectionApiIntegrationTest {
             ReflectionTestUtils.getField(manager, "handMotionEstimator");
         var geometry = bilateralPose(0L);
         estimator.observe(sessionId, epoch, 0L, System.nanoTime() - 200_000_000L,
-            new com.handwash.model.EvidenciaPoseManos(
+            new com.handwash.model.HandPoseEvidence(
                 (Double[][][]) geometry.get("poseKeypoints"),
                 (Double[][]) geometry.get("handBoxes"), 640, 480));
     }
@@ -1109,7 +1109,7 @@ class DetectionApiIntegrationTest {
 
     @Test
     void omsHttpPipelineTracksSoapEvidenceAndRestartsOnRisk() throws Exception {
-        String id = manager.crearSesion(TipoProtocolo.DOMESTICO);
+        String id = manager.crearSesion(ProtocolType.DOMESTICO);
         try {
             Map<String, Object> soapEvidence = Map.of(
                 "PALMA_IZQUIERDA", Map.of("estado", "ESPUMA_VISIBLE", "confianza", 0.95));
@@ -1186,11 +1186,11 @@ class DetectionApiIntegrationTest {
 
     @Test
     void activeDiscoveryRequiresPairingWhenMultipleSessionsExist() throws Exception {
-        String first = manager.crearSesion(TipoProtocolo.DOMESTICO);
+        String first = manager.crearSesion(ProtocolType.DOMESTICO);
         String code = manager.getCodigoEmparejamiento(first);
         assertNotNull(code);
 
-        String second = manager.crearSesion(TipoProtocolo.CLINICO_QUIRURGICO);
+        String second = manager.crearSesion(ProtocolType.CLINICO_QUIRURGICO);
         try {
             ResponseEntity<String> ambiguous = http.getForEntity("/api/session/active", String.class);
             assertEquals(HttpStatus.CONFLICT, ambiguous.getStatusCode());
@@ -1212,7 +1212,7 @@ class DetectionApiIntegrationTest {
 
     @Test
     void pairedDeviceCanReadButCannotDeleteOwnersSession() throws Exception {
-        String id = manager.crearSesion(TipoProtocolo.DOMESTICO);
+        String id = manager.crearSesion(ProtocolType.DOMESTICO);
         String code = manager.getCodigoEmparejamiento(id);
         String deviceToken = mapper.readTree(http.postForEntity(
             "/api/session/pair", Map.of("code", code), String.class).getBody())
@@ -1317,7 +1317,7 @@ class DetectionApiIntegrationTest {
 
     @Test
     void inferEndpointRejectsMissingTokenBeforeInvokingGateway() {
-        String id = manager.crearSesion(TipoProtocolo.DOMESTICO);
+        String id = manager.crearSesion(ProtocolType.DOMESTICO);
         MultiValueMap<String, Object> form = new LinkedMultiValueMap<>();
         form.add("file", new ByteArrayResource(new byte[]{1, 2, 3}) {
             @Override public String getFilename() { return "frame.jpg"; }
@@ -1350,8 +1350,8 @@ class DetectionApiIntegrationTest {
 
     @Test
     void unreadTomcatWebSocketDoesNotStallAnotherSessionAndRetainsTerminalOrder() throws Exception {
-        String slowId = manager.crearSesion(TipoProtocolo.DOMESTICO);
-        String fastId = manager.crearSesion(TipoProtocolo.DOMESTICO);
+        String slowId = manager.crearSesion(ProtocolType.DOMESTICO);
+        String fastId = manager.crearSesion(ProtocolType.DOMESTICO);
         Socket stalledClient = openUnreadWebSocket(slowId, manager.getOwnerToken(slowId));
         RecordingListener fastListener = new RecordingListener();
         WebSocket fastSocket = HttpClient.newHttpClient().newWebSocketBuilder()
@@ -1375,7 +1375,7 @@ class DetectionApiIntegrationTest {
                 Duration.ofSeconds(2), "small initial snapshot should fit the unread client's receive buffer");
             ReflectionTestUtils.setField(notificador, "sendTimeoutMs", 1_500L);
 
-            EstadoLavadoResponse largeState = new EstadoLavadoResponse();
+            HandwashingStatusResponse largeState = new HandwashingStatusResponse();
             largeState.setSessionId(slowId);
             largeState.setMessageType("STATE_UPDATE");
             largeState.setEstadoSesion("EN_PROGRESO");
@@ -1385,7 +1385,7 @@ class DetectionApiIntegrationTest {
             notificador.enviarEstado(slowId, largeState);
             boolean writeStayedBlocked = waitForBlockedWrite(slowWriter, Duration.ofSeconds(2));
 
-            EstadoLavadoResponse fastState = new EstadoLavadoResponse();
+            HandwashingStatusResponse fastState = new HandwashingStatusResponse();
             fastState.setSessionId(fastId);
             fastState.setMessageType("STATE_UPDATE");
             fastState.setEstadoSesion("EN_PROGRESO");
@@ -1529,7 +1529,7 @@ class DetectionApiIntegrationTest {
         ResponseEntity<String> created = http.postForEntity(
             "/api/session", Map.of("protocolo", "DOMESTICO"), String.class);
         String id = mapper.readTree(created.getBody()).get("sessionId").asText();
-        DeteccionObserver brokenValidator = event -> {
+        DetectionObserver brokenValidator = event -> {
             throw new IllegalStateException("validation unavailable");
         };
         receptor.addCriticalObserver(brokenValidator);
@@ -1539,8 +1539,8 @@ class DetectionApiIntegrationTest {
             JsonNode failure = mapper.readTree(result.getBody());
             assertEquals("ERROR_PROCESAMIENTO", failure.get("error").asText());
             assertEvaluationDtoShape(failure.get("estado"));
-            assertEquals(EstadoSesion.EXPIRADA, manager.getSesion(id).getEstadoSesion());
-            assertEquals(TipoInfraccion.ERROR_PROCESAMIENTO,
+            assertEquals(HandwashingSessionState.EXPIRADA, manager.getSesion(id).getEstadoSesion());
+            assertEquals(ViolationType.ERROR_PROCESAMIENTO,
                 manager.getSesion(id).getHistorialInfracciones().get(0).getTipo());
         } finally {
             receptor.removeObserver(brokenValidator);
@@ -1552,7 +1552,7 @@ class DetectionApiIntegrationTest {
         ResponseEntity<String> response = http.getForEntity("/api/protocols", String.class);
         assertEquals(HttpStatus.OK, response.getStatusCode());
         JsonNode protocols = mapper.readTree(response.getBody());
-        for (TipoProtocolo protocol : TipoProtocolo.values()) {
+        for (ProtocolType protocol : ProtocolType.values()) {
             JsonNode published = protocols.get(protocol.name());
             assertTrue(published.isObject());
             assertTrue(published.hasNonNull("nombre") && published.get("nombre").isTextual());
@@ -1568,16 +1568,16 @@ class DetectionApiIntegrationTest {
             assertEquals(strategyFactory.crear(protocol).getDuracionTotalMs(),
                 published.get("duracion_total_ms").asLong());
             Set<String> expectedSteps = new HashSet<>();
-            for (PasoLavado step : PasoLavado.values()) {
-                if (step != PasoLavado.FONDO) expectedSteps.add(step.name());
+            for (HandwashingStep step : HandwashingStep.values()) {
+                if (step != HandwashingStep.FONDO) expectedSteps.add(step.name());
             }
             JsonNode publishedStepTimes = published.get("tiempos_por_paso");
             assertEquals(expectedSteps.size(), publishedStepTimes.size());
             for (String expectedStep : expectedSteps) {
                 assertTrue(publishedStepTimes.has(expectedStep));
             }
-            for (PasoLavado step : PasoLavado.values()) {
-                if (step != PasoLavado.FONDO) {
+            for (HandwashingStep step : HandwashingStep.values()) {
+                if (step != HandwashingStep.FONDO) {
                     assertEquals(strategyFactory.crear(protocol).getTiempoRequeridoPaso(step),
                         published.get("tiempos_por_paso").get(step.name()).asLong());
                 }
@@ -1688,7 +1688,7 @@ class DetectionApiIntegrationTest {
 
     @Test
     void websocketTicketEndpointRequiresCurrentSessionCredential() throws Exception {
-        String id = manager.crearSesion(TipoProtocolo.DOMESTICO);
+        String id = manager.crearSesion(ProtocolType.DOMESTICO);
         try {
             HttpHeaders invalidHeaders = new HttpHeaders();
             invalidHeaders.setBearerAuth("invalid-token");
@@ -1715,7 +1715,7 @@ class DetectionApiIntegrationTest {
 
     @Test
     void websocketRejectsLegacyRawAccessTokenAndMissingTicket() throws Exception {
-        String id = manager.crearSesion(TipoProtocolo.DOMESTICO);
+        String id = manager.crearSesion(ProtocolType.DOMESTICO);
         RecordingListener listener = new RecordingListener();
         try {
             HttpClient.newHttpClient().newWebSocketBuilder()

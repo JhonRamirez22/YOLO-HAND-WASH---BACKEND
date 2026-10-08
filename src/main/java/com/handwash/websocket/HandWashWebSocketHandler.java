@@ -1,7 +1,7 @@
 package com.handwash.websocket;
 
-import com.handwash.agent.Notificador;
-import com.handwash.model.SesionLavado;
+import com.handwash.agent.Notifier;
+import com.handwash.model.HandwashingSession;
 import com.handwash.service.SessionManager;
 import com.handwash.security.WebSocketTicketService;
 import org.slf4j.Logger;
@@ -17,10 +17,10 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
 public class HandWashWebSocketHandler extends TextWebSocketHandler {
     private static final Logger log = LoggerFactory.getLogger(HandWashWebSocketHandler.class);
     private final SessionManager sessionManager;
-    private final Notificador notificador;
+    private final Notifier notificador;
     private final WebSocketTicketService ticketService;
 
-    public HandWashWebSocketHandler(SessionManager sessionManager, Notificador notificador,
+    public HandWashWebSocketHandler(SessionManager sessionManager, Notifier notificador,
                                     WebSocketTicketService ticketService) {
         this.sessionManager = sessionManager;
         this.notificador = notificador;
@@ -30,7 +30,7 @@ public class HandWashWebSocketHandler extends TextWebSocketHandler {
     @Override
     public void afterConnectionEstablished(WebSocketSession session) throws Exception {
         String sessionId = extractSessionId(session);
-        SesionLavado sesion = sessionId == null ? null : sessionManager.getSesion(sessionId);
+        HandwashingSession sesion = sessionId == null ? null : sessionManager.getSesion(sessionId);
         if (sesion == null) {
             session.close(CloseStatus.POLICY_VIOLATION.withReason("Sesion no activa"));
             return;
