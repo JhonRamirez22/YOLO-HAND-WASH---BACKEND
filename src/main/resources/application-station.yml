@@ -1,0 +1,79 @@
+server:
+  port: 8080
+  address: 127.0.0.1
+  tomcat:
+    # Una estación tiene una sola fuente de detecciones; acotar workers y
+    # conexiones evita acumular peticiones antiguas bajo una sobrecarga local.
+    threads:
+      max: 32
+      min-spare: 4
+    accept-count: 16
+    max-connections: 512
+
+spring:
+  web:
+    resources:
+      add-mappings: true
+  task:
+    scheduling:
+      pool:
+        size: 4
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include:
+          - health
+  endpoint:
+    health:
+      show-details: never
+
+handwash:
+  security:
+    rate-limit-window-ms: 60000
+    session-create-per-window: 20
+    session-pair-per-window: 10
+    rate-limit-max-clients: 10000
+    rate-limit-cleanup-ms: 60000
+  receptor:
+    confidence-threshold: 0.35
+    oms-confidence-threshold: 0.6
+  intention:
+    confirmation-ms: 650
+    max-gap-ms: 650
+    min-observations: 3
+    pause-reset-ms: 1500
+    start-confidence: 0.75
+    start-minimum-normalized-movement: 1.0E-8
+    step-minimum-normalized-movement: 1.0E-8
+    hand-presence-warmup-ms: 3000
+    hand-presence-max-gap-ms: 500
+  cors:
+    allowed-origins: http://127.0.0.1:8080,http://localhost:8080
+  inference:
+    api-enabled: false
+  oms:
+    # Fail closed until independent clinical evaluation and a reviewed release change.
+    model-ready: false
+    input-enabled: false
+  session:
+    access-required: true
+    access-token-ttl-ms: 86400000
+    timeout-minutes: 5
+    terminal-retention-minutes: 30
+    max-detection-gap-ms: 1500
+    step-transition-confirm-max-gap-ms: 650
+    max-sessions: 128
+    expiration-check-ms: 1000
+    failed-attempt-persist-ms: 500
+    cleanup-check-ms: 60000
+    # Una sola cámara y un solo lavamanos: impedir intentos simultáneos no observables.
+    max-active-sessions: 1
+  producer:
+    require-v2: true
+  notification:
+    flush-ms: 33
+    send-timeout-ms: 3000
+    max-websocket-clients: 256
+    expired-summary-recovery-ms: 10000

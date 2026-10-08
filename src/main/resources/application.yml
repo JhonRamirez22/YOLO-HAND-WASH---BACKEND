@@ -1,0 +1,111 @@
+server:
+  port: ${SERVER_PORT:8080}
+  address: ${SERVER_ADDRESS:127.0.0.1}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include:
+          - health
+  endpoint:
+    health:
+      show-details: never
+
+spring:
+  application:
+    name: hand-wash-compliance
+  web:
+    resources:
+      # Development serves the dashboard from Vite; the dev root controller
+      # also blocks Spring's welcome-page shortcut if stale assets remain.
+      add-mappings: false
+  task:
+    scheduling:
+      pool:
+        size: ${HANDWASH_SCHEDULER_POOL_SIZE:4}
+  datasource:
+    # Base local, fuera de Git y sin servidor externo. Ejecutar desde la raíz del proyecto.
+    url: ${HANDWASH_DB_URL:jdbc:h2:file:./.runtime/handwash;DB_CLOSE_ON_EXIT=FALSE}
+    username: ${HANDWASH_DB_USERNAME:sa}
+    password: ${HANDWASH_DB_PASSWORD:}
+    driver-class-name: org.h2.Driver
+  sql:
+    init:
+      mode: always
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 12MB
+
+handwash:
+  producer:
+    require-v2: ${HANDWASH_PRODUCER_REQUIRE_V2:false}
+  cors:
+    allowed-origins: ${HANDWASH_CORS_ALLOWED_ORIGINS:http://127.0.0.1:5173,http://localhost:5173}
+  security:
+    rate-limit-window-ms: ${HANDWASH_RATE_LIMIT_WINDOW_MS:60000}
+    session-create-per-window: ${HANDWASH_SESSION_CREATE_RATE_LIMIT:20}
+    session-pair-per-window: ${HANDWASH_SESSION_PAIR_RATE_LIMIT:10}
+    rate-limit-max-clients: ${HANDWASH_RATE_LIMIT_MAX_CLIENTS:10000}
+    rate-limit-cleanup-ms: ${HANDWASH_RATE_LIMIT_CLEANUP_MS:60000}
+  models:
+    hand-detector: ${HANDWASH_HAND_DETECTOR_PATH:models/hand_detector.onnx}
+    step-classifier: ${HANDWASH_STEP_CLASSIFIER_PATH:models/step_classifier.onnx}
+  oms:
+    # Solo habilitar después de entrenar y aprobar el dataset/modelo OMS completo.
+    model-ready: ${HANDWASH_OMS_MODEL_READY:false}
+    # Los perfiles de estación lo deshabilitan explícitamente hasta validar el modelo y la evidencia.
+    input-enabled: ${HANDWASH_OMS_INPUT_ENABLED:false}
+  receptor:
+    # Permite conservar fases de confianza moderada; el capturador vota 2/3
+    # frames, Java confirma transiciones con 2 observaciones y el inicio sigue
+    # exigiendo palmas >=0.75 durante 3 observaciones.
+    confidence-threshold: ${HANDWASH_RECEPTOR_CONFIDENCE_THRESHOLD:0.35}
+    # Mantener separado: acciones OMS requieren validación más estricta y el
+    # modo OMS solo se habilita con un modelo aprobado.
+    oms-confidence-threshold: ${HANDWASH_OMS_RECEPTOR_CONFIDENCE_THRESHOLD:0.6}
+  intention:
+    # El inicio depende de palmas sostenidas, dos manos y medición espacial válida;
+    # la amplitud de movimiento no descarta ningún paso.
+    confirmation-ms: ${HANDWASH_INTENTION_CONFIRMATION_MS:650}
+    min-observations: ${HANDWASH_INTENTION_MIN_OBSERVATIONS:3}
+    max-gap-ms: ${HANDWASH_INTENTION_MAX_GAP_MS:650}
+    pause-reset-ms: ${HANDWASH_INTENTION_PAUSE_RESET_MS:1500}
+    start-confidence: ${HANDWASH_INTENTION_START_CONFIDENCE:0.75}
+    start-minimum-normalized-movement: ${HANDWASH_INTENTION_START_MINIMUM_NORMALIZED_MOVEMENT:1.0E-8}
+    step-minimum-normalized-movement: ${HANDWASH_INTENTION_STEP_MINIMUM_NORMALIZED_MOVEMENT:1.0E-8}
+    hand-presence-warmup-ms: ${HANDWASH_INTENTION_HAND_PRESENCE_WARMUP_MS:3000}
+    hand-presence-max-gap-ms: ${HANDWASH_INTENTION_HAND_PRESENCE_MAX_GAP_MS:500}
+  inference:
+    # Diagnóstico opcional; el flujo activo usa el productor Python -> Java /api/v1/deteccion.
+    api-enabled: ${HANDWASH_INFERENCE_API_ENABLED:false}
+    # Límites para la ruta multipart opcional de inferencia local ONNX en Java.
+    max-image-bytes: ${HANDWASH_INFERENCE_MAX_IMAGE_BYTES:8388608}
+    max-image-pixels: ${HANDWASH_INFERENCE_MAX_IMAGE_PIXELS:16000000}
+    max-concurrent: ${HANDWASH_ONNX_MAX_CONCURRENT:1}
+    input-size: ${HANDWASH_INFERENCE_INPUT_SIZE:640}
+    hand-confidence-threshold: ${HANDWASH_HAND_CONFIDENCE_THRESHOLD:0.25}
+    step-confidence-threshold: ${HANDWASH_STEP_CONFIDENCE_THRESHOLD:0.15}
+  session:
+    access-required: ${HANDWASH_SESSION_ACCESS_REQUIRED:true}
+    # Opaque owner/device credentials are process-local and never persist; a login token can live at most 24 h.
+    access-token-ttl-ms: ${HANDWASH_SESSION_ACCESS_TOKEN_TTL_MS:86400000}
+    max-sessions: ${HANDWASH_MAX_SESSIONS:128}
+    max-active-sessions: ${HANDWASH_MAX_ACTIVE_SESSIONS:128}
+    timeout-minutes: ${HANDWASH_SESSION_TIMEOUT_MINUTES:5}
+    max-detection-gap-ms: ${HANDWASH_MAX_DETECTION_GAP_MS:1500}
+    # No usar la ventana amplia de pérdida de sesión para confirmar un cambio de paso.
+    step-transition-confirm-max-gap-ms: ${HANDWASH_STEP_TRANSITION_CONFIRM_MAX_GAP_MS:650}
+    expiration-check-ms: ${HANDWASH_SESSION_EXPIRATION_CHECK_MS:1000}
+    failed-attempt-persist-ms: ${HANDWASH_FAILED_ATTEMPT_PERSIST_MS:500}
+    terminal-retention-minutes: ${HANDWASH_SESSION_TERMINAL_RETENTION_MINUTES:30}
+    cleanup-check-ms: ${HANDWASH_SESSION_CLEANUP_CHECK_MS:60000}
+  notification:
+    # State y Strategy procesan todos los frames; la UI recibe como máximo
+    # unas 30 oportunidades de publicación por segundo por sesión, sin esperar
+    # a que WebSocket termine para responder al capturador.
+    flush-ms: ${HANDWASH_NOTIFICATION_FLUSH_MS:33}
+    send-timeout-ms: ${HANDWASH_NOTIFICATION_SEND_TIMEOUT_MS:3000}
+    max-websocket-clients: ${HANDWASH_MAX_WEBSOCKET_CLIENTS:256}
+    expired-summary-recovery-ms: ${HANDWASH_EXPIRED_SUMMARY_RECOVERY_MS:10000}
