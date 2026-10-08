@@ -1,0 +1,3 @@
+# Ruta de compatibilidad para instalaciones locales anteriores.
+# El único runtime Python soportado es el productor YOLO/cámara; Java es el backend.
+-r ../requirements-camera.txt
