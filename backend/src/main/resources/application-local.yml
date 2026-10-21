@@ -1,0 +1,14 @@
+management:
+  endpoints:
+    web:
+      exposure:
+        include:
+          - health
+          - metrics
+  endpoint:
+    health:
+      show-details: never
+
+handwash:
+  recognition:
+    geometry-shadow-enabled: ${HANDWASH_GEOMETRY_SHADOW_ENABLED:false}
