@@ -1,0 +1,8 @@
+# Explicit non-clinical instrumentation; station profiles and guards remain unchanged.
+spring:
+  config:
+    import: classpath:application-station-demo.yml
+
+handwash:
+  diagnostics:
+    phase1: true
