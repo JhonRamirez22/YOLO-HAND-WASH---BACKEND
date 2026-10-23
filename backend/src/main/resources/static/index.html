@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hand Wash Compliance - Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --color-bg: #050508;
+            --color-primary: #00e5ff;
+            --color-accent: #ff003c;
+            --color-success: #00ff88;
+            --color-warning: #ffaa00;
+            --color-text: #e0e0e0;
+            --color-muted: #666;
+            --color-border: rgba(0, 229, 255, 0.2);
+            --glow: 0 0 20px var(--color-primary), 0 0 60px rgba(0, 229, 255, 0.3);
+            --glow-accent: 0 0 20px var(--color-accent), 0 0 60px rgba(255, 0, 60, 0.3);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; cursor: none; }
+
+        body {
+            background: var(--color-bg);
+            color: var(--color-text);
+            font-family: 'Share Tech Mono', monospace;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* Custom cursor */
+        .cursor {
+            position: fixed; width: 12px; height: 12px; pointer-events: none; z-index: 99999;
+            border-radius: 50%; background: var(--color-accent);
+            transition: transform 0.15s ease;
+            mix-blend-mode: difference;
+        }
+        .cursor-ring {
+            position: fixed; width: 36px; height: 36px; pointer-events: none; z-index: 99998;
+            border-radius: 50%; border: 1px solid var(--color-primary);
+            transition: transform 0.4s ease;
+            mix-blend-mode: difference;
+        }
+
+        /* Scanlines */
+        .scanlines::after {
+            content: '';
+            position: fixed; inset: 0; pointer-events: none; z-index: 9999;
+            background: repeating-linear-gradient(
+                to bottom,
+                transparent 0px, transparent 2px,
+                rgba(0,0,0,0.15) 2px, rgba(0,0,0,0.15) 4px
+            );
+        }
+
+        /* Header */
+        .header {
+            padding: 2rem 3rem;
+            border-bottom: 1px solid var(--color-border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            animation: fade-up 0.8s ease forwards;
+        }
+
+        .logo {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.5rem;
+            font-weight: 900;
+            color: var(--color-primary);
+            text-shadow: var(--glow);
+            letter-spacing: 3px;
+        }
+
+        .status-badge {
+            padding: 0.5rem 1.5rem;
+            border: 1px solid var(--color-border);
+            border-radius: 2px;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .status-badge.connected { border-color: var(--color-success); color: var(--color-success); }
+        .status-badge.disconnected { border-color: var(--color-accent); color: var(--color-accent); }
+
+        /* Main container */
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem 3rem;
+        }
+
+        /* Session info */
+        .session-info {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+            animation: fade-up 0.8s ease 0.15s forwards;
+            opacity: 0;
+        }
+
+        .info-card {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid var(--color-border);
+            padding: 1.5rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .info-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 2px;
+            background: linear-gradient(90deg, transparent, var(--color-primary), transparent);
+        }
+
+        .info-label {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: var(--color-muted);
+            margin-bottom: 0.5rem;
+        }
+
+        .info-value {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: var(--color-primary);
+        }
+
+        .info-value.warning { color: var(--color-warning); }
+        .info-value.danger { color: var(--color-accent); }
+        .info-value.success { color: var(--color-success); }
+
+        /* Steps grid */
+        .steps-section {
+            margin-bottom: 2rem;
+            animation: fade-up 0.8s ease 0.3s forwards;
+            opacity: 0;
+        }
+
+        .section-title {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            color: var(--color-muted);
+            margin-bottom: 1.5rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--color-border);
+        }
+
+        .steps-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 1rem;
+        }
+
+        .step-card {
+            background: rgba(255,255,255,0.02);
+            border: 1px solid var(--color-border);
+            padding: 1.5rem 1rem;
+            text-align: center;
+            position: relative;
+            transition: all 0.3s ease;
+        }
+
+        .step-card.active {
+            border-color: var(--color-primary);
+            box-shadow: var(--glow);
+            background: rgba(0, 229, 255, 0.05);
+        }
+
+        .step-card.completed {
+            border-color: var(--color-success);
+        }
+
+        .step-card.completed::after {
+            content: '✓';
+            position: absolute;
+            top: 5px; right: 8px;
+            color: var(--color-success);
+            font-size: 0.8rem;
+        }
+
+        .step-number {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 2rem;
+            font-weight: 900;
+            color: var(--color-border);
+            margin-bottom: 0.5rem;
+        }
+
+        .step-card.active .step-number { color: var(--color-primary); }
+        .step-card.completed .step-number { color: var(--color-success); }
+
+        .step-name {
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--color-muted);
+            margin-bottom: 1rem;
+        }
+
+        .step-time {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.2rem;
+            color: var(--color-text);
+        }
+
+        .step-progress {
+            margin-top: 0.8rem;
+            height: 3px;
+            background: rgba(255,255,255,0.1);
+            overflow: hidden;
+        }
+
+        .step-progress-bar {
+            height: 100%;
+            background: var(--color-primary);
+            transition: width 0.3s ease;
+            box-shadow: 0 0 10px var(--color-primary);
+        }
+
+        .step-card.completed .step-progress-bar {
+            background: var(--color-success);
+            box-shadow: 0 0 10px var(--color-success);
+        }
+
+        /* Violation alert */
+        .violation-alert {
+            background: rgba(255, 0, 60, 0.1);
+            border: 1px solid var(--color-accent);
+            padding: 1rem 1.5rem;
+            margin-bottom: 2rem;
+            display: none;
+            animation: glitch 0.3s ease;
+        }
+
+        .violation-alert.visible { display: block; }
+
+        .violation-title {
+            font-family: 'Orbitron', sans-serif;
+            color: var(--color-accent);
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 0.3rem;
+        }
+
+        .violation-detail {
+            color: var(--color-text);
+            font-size: 0.85rem;
+        }
+
+        /* Session complete overlay */
+        .complete-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(5, 5, 8, 0.95);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .complete-overlay.visible {
+            display: flex;
+            animation: fade-up 0.5s ease;
+        }
+
+        .complete-card {
+            background: var(--color-bg);
+            border: 2px solid var(--color-success);
+            padding: 3rem 4rem;
+            text-align: center;
+            max-width: 500px;
+        }
+
+        .complete-icon {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+        }
+
+        .complete-title {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.5rem;
+            color: var(--color-success);
+            margin-bottom: 1rem;
+        }
+
+        .complete-detail {
+            color: var(--color-muted);
+            font-size: 0.85rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .btn-new-session {
+            margin-top: 2rem;
+            padding: 1rem 2rem;
+            background: transparent;
+            border: 1px solid var(--color-primary);
+            color: var(--color-primary);
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn-new-session:hover {
+            background: var(--color-primary);
+            color: var(--color-bg);
+            box-shadow: var(--glow);
+        }
+
+        /* Control buttons */
+        .controls {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            animation: fade-up 0.8s ease 0.45s forwards;
+            opacity: 0;
+        }
+
+        .btn {
+            padding: 0.8rem 2rem;
+            background: transparent;
+            border: 1px solid var(--color-border);
+            color: var(--color-text);
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn:hover {
+            border-color: var(--color-primary);
+            color: var(--color-primary);
+            box-shadow: var(--glow);
+        }
+
+        .btn.primary {
+            border-color: var(--color-primary);
+            color: var(--color-primary);
+        }
+
+        .btn.primary:hover {
+            background: var(--color-primary);
+            color: var(--color-bg);
+        }
+
+        /* Log panel */
+        .log-panel {
+            background: rgba(255,255,255,0.02);
+            border: 1px solid var(--color-border);
+            padding: 1rem;
+            max-height: 200px;
+            overflow-y: auto;
+            font-size: 0.75rem;
+            animation: fade-up 0.8s ease 0.6s forwards;
+            opacity: 0;
+        }
+
+        .log-entry {
+            padding: 0.3rem 0;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            color: var(--color-muted);
+        }
+
+        .log-entry .time { color: var(--color-primary); margin-right: 1rem; }
+        .log-entry .event { color: var(--color-text); }
+
+        /* Animations */
+        @keyframes fade-up {
+            from { opacity: 0; transform: translateY(24px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes glitch {
+            0%,100% { clip-path: inset(0 0 100% 0); }
+            20%      { clip-path: inset(30% 0 50% 0); transform: translate(-4px); }
+            60%      { clip-path: inset(60% 0 10% 0); transform: translate(4px); }
+        }
+
+        @keyframes glow-pulse {
+            0%,100% { box-shadow: 0 0 10px rgba(0, 229, 255, 0.3); }
+            50%      { box-shadow: 0 0 30px var(--color-primary), 0 0 60px rgba(0, 229, 255, 0.3); }
+        }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .steps-grid { grid-template-columns: repeat(4, 1fr); }
+            .session-info { grid-template-columns: repeat(2, 1fr); }
+        }
+
+        @media (max-width: 600px) {
+            .steps-grid { grid-template-columns: repeat(2, 1fr); }
+            .session-info { grid-template-columns: 1fr; }
+            .header { flex-direction: column; gap: 1rem; }
+        }
+    </style>
+</head>
+<body class="scanlines">
+    <div class="cursor" id="cursor"></div>
+    <div class="cursor-ring" id="cursor-ring"></div>
+
+    <header class="header">
+        <div class="logo">HAND WASH COMPLIANCE</div>
+        <div class="status-badge disconnected" id="ws-status">DESCONECTADO</div>
+    </header>
+
+    <main class="container">
+        <div class="session-info">
+            <div class="info-card">
+                <div class="info-label">Protocolo</div>
+                <div class="info-value" id="protocolo">--</div>
+            </div>
+            <div class="info-card">
+                <div class="info-label">Paso Actual</div>
+                <div class="info-value" id="paso-actual">--</div>
+            </div>
+            <div class="info-card">
+                <div class="info-label">Progreso</div>
+                <div class="info-value" id="progreso">0/7</div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button class="btn primary" onclick="crearSesion('CLINICO_QUIRURGICO')">Iniciar Clinico</button>
+            <button class="btn" onclick="crearSesion('DOMESTICO')">Iniciar Domestico</button>
+            <button class="btn" onclick="enviarDeteccionManual()">Simular Paso</button>
+        </div>
+
+        <div class="violation-alert" id="violation-alert">
+            <div class="violation-title">Infraccion Detectada</div>
+            <div class="violation-detail" id="violation-detail"></div>
+        </div>
+
+        <section class="steps-section">
+            <div class="section-title">Pasos del Lavado de Manos (OMS)</div>
+            <div class="steps-grid" id="steps-grid">
+                <!-- Steps populated by JS -->
+            </div>
+        </section>
+
+        <div class="log-panel" id="log-panel">
+            <div class="log-entry">
+                <span class="time">[SISTEMA]</span>
+                <span class="event">Dashboard iniciado. Crea una sesion para comenzar.</span>
+            </div>
+        </div>
+    </main>
+
+    <div class="complete-overlay" id="complete-overlay">
+        <div class="complete-card">
+            <div class="complete-icon" id="complete-icon">✓</div>
+            <div class="complete-title" id="complete-title">SESION COMPLETADA</div>
+            <div class="complete-detail" id="complete-detail"></div>
+            <button class="btn-new-session" onclick="cerrarOverlay()">Nueva Sesion</button>
+        </div>
+    </div>
+
+    <script>
+        const STEPS = [
+            { id: 'PASO_1_PALMAS', name: 'Palmas', num: 1 },
+            { id: 'PASO_2_DORSOS', name: 'Dorsos', num: 2 },
+            { id: 'PASO_3_INTERDIGITALES', name: 'Interdigitales', num: 3 },
+            { id: 'PASO_4_NUDILLOS', name: 'Nudillos', num: 4 },
+            { id: 'PASO_5_PULGAR', name: 'Pulgar', num: 5 },
+            { id: 'PASO_6_PUNTA_DE_DEDOS', name: 'Punta Dedos', num: 6 },
+            { id: 'PASO_7_CIRCULARES', name: 'Circulares', num: 7 },
+        ];
+
+        let ws = null;
+        let sessionId = null;
+        let currentStepIndex = 0;
+
+        // Custom cursor
+        const cursor = document.getElementById('cursor');
+        const cursorRing = document.getElementById('cursor-ring');
+        document.addEventListener('mousemove', (e) => {
+            cursor.style.left = e.clientX - 6 + 'px';
+            cursor.style.top = e.clientY - 6 + 'px';
+            cursorRing.style.left = e.clientX - 18 + 'px';
+            cursorRing.style.top = e.clientY - 18 + 'px';
+        });
+
+        // Initialize steps grid
+        function initStepsGrid() {
+            const grid = document.getElementById('steps-grid');
+            grid.innerHTML = STEPS.map(step => `
+                <div class="step-card" id="step-${step.num}" data-step="${step.id}">
+                    <div class="step-number">${step.num}</div>
+                    <div class="step-name">${step.name}</div>
+                    <div class="step-time" id="time-${step.num}">0.0s</div>
+                    <div class="step-progress">
+                        <div class="step-progress-bar" id="progress-${step.num}" style="width: 0%"></div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Create session
+        async function crearSesion(protocolo) {
+            try {
+                const res = await fetch('/api/session', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ protocolo })
+                });
+                const data = await res.json();
+                sessionId = data.sessionId;
+                document.getElementById('protocolo').textContent = protocolo.replace('_', ' ');
+                addLog('Sesion creada: ' + sessionId.substring(0, 8) + '...');
+                connectWebSocket();
+            } catch (e) {
+                addLog('Error creando sesion: ' + e.message);
+            }
+        }
+
+        // WebSocket connection
+        function connectWebSocket() {
+            if (ws) ws.close();
+            const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            ws = new WebSocket(`${protocol}//${location.host}/ws/${sessionId}`);
+
+            ws.onopen = () => {
+                document.getElementById('ws-status').textContent = 'CONECTADO';
+                document.getElementById('ws-status').className = 'status-badge connected';
+                addLog('WebSocket conectado');
+            };
+
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                updateUI(data);
+            };
+
+            ws.onclose = () => {
+                document.getElementById('ws-status').textContent = 'DESCONECTADO';
+                document.getElementById('ws-status').className = 'status-badge disconnected';
+            };
+        }
+
+        // Update UI with state
+        function updateUI(data) {
+            if (data.error) return;
+
+            // Update current step
+            const currentStep = data.estadoActual;
+            document.getElementById('paso-actual').textContent = currentStep.replace(/_/g, ' ');
+            document.getElementById('progreso').textContent = `${data.progreso?.pasosCompletados || 0}/7`;
+
+            // Update step cards
+            const details = data.detallesPasos || [];
+            details.forEach(detail => {
+                const stepNum = parseInt(detail.paso.split('_')[1]);
+                const card = document.getElementById(`step-${stepNum}`);
+                const timeEl = document.getElementById(`time-${stepNum}`);
+                const progressEl = document.getElementById(`progress-${stepNum}`);
+
+                if (card) {
+                    const isActive = detail.paso === currentStep;
+                    const isCompleted = detail.completado;
+
+                    card.className = 'step-card' + (isActive ? ' active' : '') + (isCompleted ? ' completed' : '');
+
+                    if (timeEl) {
+                        timeEl.textContent = (detail.tiempoAcumuladoMs / 1000).toFixed(1) + 's';
+                    }
+                    if (progressEl) {
+                        const pct = Math.min(100, (detail.tiempoAcumuladoMs / detail.tiempoRequeridoMs) * 100);
+                        progressEl.style.width = pct + '%';
+                    }
+                }
+            });
+
+            // Handle violations
+            if (data.infraccion) {
+                const alert = document.getElementById('violation-alert');
+                document.getElementById('violation-detail').textContent = data.infraccion.detalle;
+                alert.classList.add('visible');
+                setTimeout(() => alert.classList.remove('visible'), 5000);
+                addLog('INFRACCION: ' + data.infraccion.detalle);
+            }
+
+            // Handle session complete
+            if (data.estadoSesion === 'COMPLETADA') {
+                document.getElementById('complete-overlay').classList.add('visible');
+                document.getElementById('complete-title').textContent = 'SESION COMPLETADA';
+                addLog('Sesion completada');
+            }
+        }
+
+        // Simulate a detection (for demo)
+        function enviarDeteccionManual() {
+            if (!sessionId || !ws || ws.readyState !== WebSocket.OPEN) {
+                addLog('No hay sesion activa');
+                return;
+            }
+
+            const steps = ['Paso1_Palmas', 'Paso2_Dorsos', 'Paso3_Interdigitales',
+                          'Paso4_Nudillos', 'Paso5_Pulgar', 'Paso6_PuntaDeDedos', 'Paso7_Circulares'];
+
+            const step = steps[currentStepIndex % steps.length];
+            currentStepIndex++;
+
+            const evento = {
+                claseDetectada: step,
+                confianza: 0.95
+            };
+
+            ws.send(JSON.stringify(evento));
+            addLog('Enviado: ' + step);
+        }
+
+        // Logging
+        function addLog(message) {
+            const panel = document.getElementById('log-panel');
+            const time = new Date().toLocaleTimeString('es-ES');
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.innerHTML = `<span class="time">[${time}]</span> <span class="event">${message}</span>`;
+            panel.appendChild(entry);
+            panel.scrollTop = panel.scrollHeight;
+        }
+
+        // Close overlay
+        function cerrarOverlay() {
+            document.getElementById('complete-overlay').classList.remove('visible');
+            currentStepIndex = 0;
+            initStepsGrid();
+        }
+
+        // Initialize
+        initStepsGrid();
+    </script>
+</body>
+</html>
