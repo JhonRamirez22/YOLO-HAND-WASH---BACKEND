@@ -1,0 +1,13 @@
+{
+  "cc-api-provider:account=762911134095:expectedMatchCount=exactly-one:propertiesToReturn.0=PrefixListId:propertyMatch.PrefixListName=com.amazonaws.global.cloudfront.origin-facing:region=sa-east-1:typeName=AWS$:$:EC2$:$:PrefixList": [
+    {
+      "PrefixListId": "pl-5da64334",
+      "Identifier": "pl-5da64334"
+    }
+  ],
+  "availability-zones:account=762911134095:region=sa-east-1": [
+    "sa-east-1a",
+    "sa-east-1b",
+    "sa-east-1c"
+  ]
+}
