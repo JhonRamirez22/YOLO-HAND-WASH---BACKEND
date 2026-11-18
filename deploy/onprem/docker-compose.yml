@@ -1,0 +1,108 @@
+# HandWash backend on the Windows PC: PostgreSQL (private) + Java backend (127.0.0.1:8080 only).
+# The public HTTPS address comes from Tailscale Funnel, which forwards to 127.0.0.1:8080.
+name: handwash
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: handwash
+      POSTGRES_USER: handwash_owner
+      POSTGRES_PASSWORD: ${HANDWASH_OWNER_PASSWORD:?run INSTALAR-Y-INICIAR first}
+      HANDWASH_RUNTIME_PASSWORD: ${HANDWASH_DB_PASSWORD:?}
+      HANDWASH_MIGRATOR_PASSWORD: ${HANDWASH_MIGRATION_DB_PASSWORD:?}
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+      - ./db-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U handwash_owner -d handwash"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    # No published port: only the backend reaches it, over the compose network.
+
+  backend:
+    build:
+      context: ../..
+      dockerfile: backend/Dockerfile.onprem
+    image: handwash-backend-onprem:local
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      HANDWASH_DB_URL: jdbc:postgresql://db:5432/handwash
+      HANDWASH_MIGRATION_DB_URL: jdbc:postgresql://db:5432/handwash
+      HANDWASH_DB_USERNAME: handwash_runtime
+      HANDWASH_DB_PASSWORD: ${HANDWASH_DB_PASSWORD:?}
+      HANDWASH_MIGRATION_DB_USERNAME: handwash_migrator
+      HANDWASH_MIGRATION_DB_PASSWORD: ${HANDWASH_MIGRATION_DB_PASSWORD:?}
+      HANDWASH_DB_POOL_MAX: "8"
+      HANDWASH_AUDIT_CHAIN_SECRET: ${HANDWASH_AUDIT_CHAIN_SECRET:?}
+      HANDWASH_ADMIN_TOTP_KEY: ${HANDWASH_ADMIN_TOTP_KEY:?}
+      HANDWASH_AUDIT_SEAL_DIR: /data/seals
+      HANDWASH_BOOTSTRAP_ADMIN_USERNAME: ${HANDWASH_BOOTSTRAP_ADMIN_USERNAME:-}
+      HANDWASH_BOOTSTRAP_ADMIN_PASSWORD: ${HANDWASH_BOOTSTRAP_ADMIN_PASSWORD:-}
+      HANDWASH_CORS_ALLOWED_ORIGINS: ${HANDWASH_CORS_ALLOWED_ORIGINS:?}
+      HANDWASH_MODEL_VERSION: yolo26n_7pasos_b64-unvalidated
+      HANDWASH_MODEL_SHA256: 9c1198467ef84c108b093f2c3da8d73d313b96855e2d42ec5f4b9729577d30e7
+      HANDWASH_DATASET_VERSION: training-yaml-not-provided
+      HANDWASH_EVIDENCE_CAPTURE_ENABLED: "false"
+      # Joined hands (steps 3-6) are seen as one blob for moments: tolerate short dropouts before pausing or restarting.
+      HANDWASH_INTENTION_PAUSE_RESET_MS: ${HANDWASH_INTENTION_PAUSE_RESET_MS:-6000}
+      HANDWASH_INTENTION_HAND_PRESENCE_MAX_GAP_MS: ${HANDWASH_INTENTION_HAND_PRESENCE_MAX_GAP_MS:-1000}
+      # Palms seen from an angle are less sure: start the wash from 60 % (it was 75 %).
+      HANDWASH_INTENTION_START_CONFIDENCE: ${HANDWASH_INTENTION_START_CONFIDENCE:-0.6}
+      HANDWASH_MAX_DETECTION_GAP_MS: ${HANDWASH_MAX_DETECTION_GAP_MS:-3000}
+      # Video between two networks: public STUN by default; TURN (below) only when its secret is set in .env.
+      HANDWASH_WEBRTC_STUN_URLS: ${HANDWASH_WEBRTC_STUN_URLS:-stun:stun.l.google.com:19302}
+      HANDWASH_WEBRTC_TURN_URLS: ${HANDWASH_WEBRTC_TURN_URLS:-}
+      HANDWASH_WEBRTC_TURN_SHARED_SECRET: ${HANDWASH_WEBRTC_TURN_SHARED_SECRET:-}
+    volumes:
+      - ./seals:/data/seals
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail --silent http://localhost:8080/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 90s
+    stop_grace_period: 60s
+
+  # Relay for the camera video when the phone/Mac and the YOLO PC cannot reach each other directly. Credentials are
+  # short-lived and issued by the backend (use-auth-secret); private ranges are denied so it cannot be used to
+  # reach the VM's own network. Start it with: docker compose --profile turn up -d
+  turn:
+    image: coturn/coturn:4.6.2
+    profiles: ["turn"]
+    network_mode: host
+    restart: unless-stopped
+    command:
+      - -n
+      - --log-file=stdout
+      - --realm=handwash
+      - --fingerprint
+      - --use-auth-secret
+      - --static-auth-secret=${HANDWASH_WEBRTC_TURN_SHARED_SECRET:-unset-run-hw-start}
+      - --listening-port=3478
+      - --min-port=49160
+      - --max-port=49200
+      - --external-ip=${HANDWASH_TURN_EXTERNAL_IP:-0.0.0.0}/${HANDWASH_TURN_PRIVATE_IP:-10.20.0.4}
+      - --no-multicast-peers
+      - --no-cli
+      - --no-tls
+      - --no-dtls
+      - --total-quota=20
+      - --user-quota=6
+      - --denied-peer-ip=0.0.0.0-0.255.255.255
+      - --denied-peer-ip=10.0.0.0-10.255.255.255
+      - --denied-peer-ip=100.64.0.0-100.127.255.255
+      - --denied-peer-ip=127.0.0.0-127.255.255.255
+      - --denied-peer-ip=168.63.129.16-168.63.129.16
+      - --denied-peer-ip=169.254.0.0-169.254.255.255
+      - --denied-peer-ip=172.16.0.0-172.31.255.255
+      - --denied-peer-ip=192.168.0.0-192.168.255.255
+
+volumes:
+  dbdata:
