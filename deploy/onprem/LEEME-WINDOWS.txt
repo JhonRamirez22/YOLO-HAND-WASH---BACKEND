@@ -1,0 +1,38 @@
+HANDWASH - BACKEND EN ESTE PC (sin AWS)
+=======================================
+
+1. Copia esta carpeta completa al PC con la RTX (por ejemplo a C:\HandWash_Backend).
+2. Doble clic en INSTALAR-Y-INICIAR.cmd (pide permisos de administrador una vez).
+   Instala Docker Desktop y Tailscale si faltan, crea las claves, construye el backend,
+   lo arranca y lo publica con Tailscale Funnel. Al final muestra la URL publica
+   (tambien queda en deploy\onprem\URL-PUBLICA.txt).
+   - Si Docker Desktop acaba de instalarse: reinicia el PC, abre Docker Desktop una vez
+     y vuelve a ejecutar INSTALAR-Y-INICIAR.cmd.
+   - Tailscale: inicia sesion en el navegador; si Funnel no esta habilitado, activa
+     "HTTPS Certificates" en https://login.tailscale.com/admin/dns y permite Funnel
+     con el enlace que muestra el script.
+3. Primer ingreso ADMIN: abre el frontend, entra a #/admin con el usuario y contrasena
+   que escribiste en el paso 2; la primera vez muestra la clave TOTP para tu app
+   autenticadora. Vuelve a iniciar sesion con el codigo de 6 digitos.
+4. Para el profesor: tener el PC encendido y ejecutar INICIAR-BACKEND.cmd (tras reiniciar)
+   y luego INICIAR-HANDWASH.cmd del productor YOLO. DETENER-BACKEND.cmd lo apaga.
+   ESTADO-BACKEND.cmd muestra si responde.
+
+CONECTAR EL FRONTEND DE VERCEL (una sola vez, con la URL publica de arriba)
+  HANDWASH_BACKEND_ORIGIN = <URL publica>
+  VITE_API_URL            = <URL publica>
+  VITE_WS_URL             = wss://<mismo host>
+  VITE_ADMIN_LOGIN        = local
+  y volver a desplegar el frontend.
+
+PRODUCTOR YOLO (en este mismo PC): origen del backend http://127.0.0.1:8080
+  (ya es el valor por defecto de INICIAR-HANDWASH). Usa la API key creada en ADMIN.
+
+COPIAS DE SEGURIDAD
+  - deploy\onprem\.env  (claves). Sin el no se pueden leer los datos. Guardalo fuera del PC.
+  - deploy\onprem\seals (sellos diarios de la cadena de auditoria). Para una segunda copia
+    escribe una ruta (ej. D:\copias\sellos o una USB) en deploy\onprem\copia-sellos.txt;
+    INICIAR-BACKEND la sincroniza. Es una proteccion mas debil que Object Lock de AWS.
+  - Los datos viven en el volumen Docker "handwash_dbdata". No lo borres.
+
+LIMITES: modo no clinico; no se guardan fotos ni video.
