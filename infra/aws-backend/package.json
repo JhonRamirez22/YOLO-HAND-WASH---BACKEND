@@ -1,0 +1,28 @@
+{
+  "name": "handwash-aws-backend",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "synth": "cdk synth --strict",
+    "diff": "cdk diff",
+    "deploy": "cdk deploy --require-approval broadening",
+    "test": "tsx --test test/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@aws-sdk/client-codebuild": "3.1149.0",
+    "@aws-sdk/client-secrets-manager": "3.1149.0",
+    "aws-cdk-lib": "2.273.0",
+    "constructs": "10.8.1",
+    "pg": "8.23.1"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "8.10.164",
+    "@types/node": "20.19.43",
+    "@types/pg": "8.23.1",
+    "aws-cdk": "2.1145.0",
+    "esbuild": "0.28.2",
+    "tsx": "4.23.15",
+    "typescript": "5.9.3"
+  }
+}
